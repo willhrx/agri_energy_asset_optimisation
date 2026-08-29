@@ -16,6 +16,7 @@ def plot_run(
     dispatch: dict[str, Any],
     station: dict[str, Any],
     path: str | Path,
+    title: str | None = None,
 ) -> Path:
     n = len(series["timestamps"])
     x = list(range(n))
@@ -78,10 +79,73 @@ def plot_run(
     ax.set_xticklabels(tick_labels, rotation=30, ha="right")
     ax.set_xlim(0, n - 1)
 
+    policy = dispatch.get("policy", "run")
     fig.suptitle(
-        f"{station['station_id']}  {series.get('scenario', '')}  greedy",
+        title or f"{station['station_id']}  {series.get('scenario', '')}  {policy}",
         fontsize=12,
     )
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(path, dpi=120)
+    plt.close(fig)
+    return path
+
+
+def plot_compare(
+    series: dict[str, Any],
+    greedy: dict[str, Any],
+    opt: dict[str, Any],
+    station: dict[str, Any],
+    path: str | Path,
+) -> Path:
+    n = len(series["timestamps"])
+    x = list(range(n))
+    tick_idx = list(range(0, n, 6))
+    tick_labels = [ts[8:10] + " " + ts[11:16] for ts in (series["timestamps"][i] for i in tick_idx)]
+
+    fig, axes = plt.subplots(4, 1, figsize=(12, 11), sharex=True, constrained_layout=True)
+
+    ax = axes[0]
+    ax.plot(x, greedy["g_kw"], label="Greedy diesel", color="tab:red", alpha=0.85)
+    ax.plot(x, opt["g_kw"], label="MILP diesel", color="tab:orange", linestyle="--")
+    ax.set_ylabel("kW")
+    ax.set_title("Diesel")
+    ax.legend(loc="upper right", fontsize=8)
+    ax.grid(True, alpha=0.3)
+
+    ax = axes[1]
+    ax.plot(x, greedy["S_kwh"], label="Greedy SoC", color="tab:green")
+    ax.plot(x, opt["S_kwh"], label="MILP SoC", color="tab:olive", linestyle="--")
+    ax.set_ylabel("kWh")
+    ax.set_title("Battery SoC")
+    ax.legend(loc="upper right", fontsize=8)
+    ax.grid(True, alpha=0.3)
+
+    ax = axes[2]
+    ax.plot(x, greedy["V_kl"], label="Greedy dam", color="tab:cyan")
+    ax.plot(x, opt["V_kl"], label="MILP dam", color="tab:blue", linestyle="--")
+    ax.axhline(float(station["water"]["dam_reserve_kl"]), color="tab:red", linestyle=":", label="Reserve")
+    ax.set_ylabel("kL")
+    ax.set_title("Dam")
+    ax.legend(loc="upper right", fontsize=8)
+    ax.grid(True, alpha=0.3)
+
+    ax = axes[3]
+    ax.step(x, greedy["uA"], where="post", label="Greedy A", color="tab:brown", alpha=0.7)
+    ax.step(x, greedy["uB"], where="post", label="Greedy B", color="tab:orange", alpha=0.7)
+    ax.step(x, [u + 0.05 for u in opt["uA"]], where="post", label="MILP A", color="saddlebrown", linestyle="--")
+    ax.step(x, [u + 0.1 for u in opt["uB"]], where="post", label="MILP B", color="darkorange", linestyle="--")
+    ax.set_ylim(-0.1, 1.3)
+    ax.set_ylabel("on/off")
+    ax.set_title("Bores")
+    ax.legend(loc="upper right", ncol=2, fontsize=8)
+    ax.grid(True, alpha=0.3)
+    ax.set_xlabel("Local time (Australia/Sydney), dd HH:MM")
+    ax.set_xticks(tick_idx)
+    ax.set_xticklabels(tick_labels, rotation=30, ha="right")
+    ax.set_xlim(0, n - 1)
+
+    fig.suptitle(f"{station['station_id']}  {series.get('scenario', '')}  greedy vs MILP", fontsize=12)
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(path, dpi=120)

@@ -50,7 +50,9 @@ def compute_kpis(station: dict[str, Any], series: dict[str, Any], dispatch: dict
                 }
             )
 
+    penalty = float(station["objective"]["unmet_water_aud_per_kl"])
     kpis: dict[str, Any] = {
+        "policy": dispatch.get("policy", "unknown"),
         "diesel_litres": diesel_litres,
         "diesel_aud": diesel_aud,
         "pv_kwh": pv_kwh,
@@ -59,6 +61,7 @@ def compute_kpis(station: dict[str, Any], series: dict[str, Any], dispatch: dict
         "min_soc_kwh": min_soc_kwh,
         "unmet_kl_total": unmet_total,
         "hours_diesel_on": hours_diesel_on,
+        "objective_aud": diesel_aud + penalty * unmet_total,
     }
     if unmet_total > 1e-9:
         kpis["unmet_hours"] = unmet_by_hour
@@ -76,6 +79,8 @@ def print_kpis(kpis: dict[str, Any]) -> None:
     print("KPIs")
     print(f"  diesel_litres     {kpis['diesel_litres']:.3f} L")
     print(f"  diesel_aud        {kpis['diesel_aud']:.2f} AUD")
+    if "objective_aud" in kpis:
+        print(f"  objective_aud     {kpis['objective_aud']:.2f} AUD")
     print(f"  pv_kwh            {kpis['pv_kwh']:.2f} kWh")
     print(f"  pv_curtailed_kwh  {kpis['pv_curtailed_kwh']:.2f} kWh")
     print(f"  min_dam_kl        {kpis['min_dam_kl']:.2f} kL")
