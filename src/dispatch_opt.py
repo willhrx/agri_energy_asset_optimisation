@@ -41,12 +41,8 @@ def _val(var) -> float:
     return float(v)
 
 
-def _cbc_solver() -> pulp.LpSolver:
-    kwargs = dict(msg=False, timeLimit=60, threads=1)
-    try:
-        return pulp.PULP_CBC_CMD(gapRel=1e-6, **kwargs)
-    except TypeError:
-        return pulp.PULP_CBC_CMD(fracGap=1e-6, **kwargs)
+def _cbc_solver():
+    return pulp.PULP_CBC_CMD(msg=False, timeLimit=60, gapRel=1e-6, threads=1)
 
 
 def dispatch_opt(station: dict[str, Any], series: dict[str, Any]) -> dict[str, Any]:

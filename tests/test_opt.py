@@ -100,6 +100,25 @@ def test_opt_battery_dynamics(station: dict, opt: dict) -> None:
         assert s_min - 1e-3 <= opt["S_kwh"][t] <= s_max + 1e-3
 
 
+def test_opt_binary_bores_and_bounds(station: dict, opt: dict) -> None:
+    for t in range(len(opt["uA"])):
+        assert opt["uA"][t] in (0, 1)
+        assert opt["uB"][t] in (0, 1)
+        assert -1e-6 <= opt["c_kw"][t] <= 15.0 + 1e-6
+        assert -1e-6 <= opt["d_kw"][t] <= 15.0 + 1e-6
+        assert opt["dump_kw"][t] == pytest.approx(0.0, abs=1e-6)
+    soc = opt["S_kwh"] + [opt["S_kwh_end"][-1]]
+    assert min(soc) >= 9.0 - 1e-3
+    assert max(soc) <= 57.0 + 1e-3
+    dam = opt["V_kl"] + [opt["V_kl_end"][-1]]
+    assert min(dam) >= 1000.0 - 1e-3
+    assert max(dam) <= 10000.0 + 1e-3
+    for p in station["water"]["paddocks"]:
+        w = opt["W_kl"][p] + [opt["W_kl_end"][p][-1]]
+        assert min(w) >= -1e-6
+        assert max(w) <= 20.0 + 1e-3
+
+
 def test_opt_diesel_band_and_no_dual(station: dict, opt: dict) -> None:
     g_min = float(station["power"]["diesel_kw_min"])
     g_max = float(station["power"]["diesel_kw_max"])

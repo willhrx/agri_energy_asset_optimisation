@@ -5,7 +5,15 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from src.gui import HTML_PAGE, NODE_IDS, build_payload, schematic_edges
+from src.gui import (
+    HTML_PAGE,
+    NODE_IDS,
+    build_payload,
+    check_served_page,
+    curl_page,
+    schematic_edges,
+    serve_in_thread,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -42,3 +50,24 @@ def test_site_graph_edges() -> None:
     assert "e_bore_a_dam" in ids
     domains = {e["domain"] for e in schematic_edges()}
     assert domains == {"power", "water"}
+
+
+def test_http_serves_html_and_payload() -> None:
+    station = json.loads((ROOT / "data" / "wirra-bore.json").read_text(encoding="utf-8"))
+    httpd = serve_in_thread(station, ROOT / "output")
+    try:
+        host, port = httpd.server_address[:2]
+        code, html = curl_page(f"http://{host}:{port}/")
+        assert code == 200
+        for node_id in NODE_IDS:
+            assert node_id in html
+        assert "Play" in html
+        pcode, pbody = curl_page(f"http://{host}:{port}/api/payload")
+        assert pcode == 200
+        payload = json.loads(pbody)
+        assert payload["bus"]["kind"] == "bus"
+        assert len(payload["edges"]) >= 12
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+    assert check_served_page(station, ROOT / "output") == 0

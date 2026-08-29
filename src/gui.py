@@ -12,6 +12,9 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import threading
+import urllib.error
+import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
@@ -534,6 +537,8 @@ class GuiHandler(BaseHTTPRequestHandler):
 
 
 class GuiServer(ThreadingHTTPServer):
+    allow_reuse_address = True
+
     def __init__(
         self,
         addr: tuple[str, int],
@@ -548,12 +553,65 @@ class GuiServer(ThreadingHTTPServer):
         return build_payload(self._station, self._output_dir)
 
 
+def curl_page(url: str, timeout: float = 5.0) -> tuple[int, str]:
+    """GET url (stdlib). Same check as `curl -sS -D -` without extra deps."""
+    req = urllib.request.Request(url, method="GET")
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            body = resp.read().decode("utf-8", errors="replace")
+            return int(resp.status), body
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="replace")
+        return int(exc.code), body
+
+
+def serve_in_thread(station: dict[str, Any], output_dir: Path, host: str = "127.0.0.1") -> GuiServer:
+    httpd = GuiServer((host, 0), station, output_dir)
+    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    thread.start()
+    return httpd
+
+
+def check_served_page(station: dict[str, Any], output_dir: Path) -> int:
+    httpd = serve_in_thread(station, output_dir)
+    host, port = httpd.server_address[:2]
+    url = f"http://{host}:{port}/"
+    try:
+        code, html = curl_page(url)
+        print(f"GET {url} -> {code} ({len(html)} bytes)")
+        missing = [n for n in NODE_IDS if n not in html]
+        if code != 200 or missing:
+            print("  FAIL missing nodes:", missing)
+            return 1
+        for token in ("Play", "btn-play", "btn-opt", 'id="hour"', "min=\"0\"", "max=\"47\""):
+            if token not in html:
+                print(f"  FAIL missing control {token!r}")
+                return 1
+        print("  nodes:", " ".join(NODE_IDS))
+        pcode, pbody = curl_page(f"http://{host}:{port}/api/payload")
+        payload = json.loads(pbody) if pcode == 200 else {}
+        print(
+            f"GET /api/payload -> {pcode} greedy={payload.get('dispatch_greedy') is not None} "
+            f"opt={payload.get('dispatch_opt') is not None} edges={len(payload.get('edges') or [])}"
+        )
+        print("curl check ok")
+        return 0
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Wirra-bore sprint 3 schematic GUI")
     parser.add_argument("--station", default="data/wirra-bore.json")
     parser.add_argument("--output-dir", default="output")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8765)
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="bind ephemeral port, GET / and /api/payload, print, exit",
+    )
     args = parser.parse_args(argv)
 
     station_path = Path(args.station)
@@ -571,6 +629,8 @@ def main(argv: list[str] | None = None) -> int:
     payload = build_payload(station, output_dir)
     has_greedy = payload["dispatch_greedy"] is not None
     has_opt = payload["dispatch_opt"] is not None
+    if args.check:
+        return check_served_page(station, output_dir)
 
     httpd = GuiServer((args.host, args.port), station, output_dir)
     url = f"http://{args.host}:{args.port}/"
