@@ -124,78 +124,101 @@ def build_payload(station: dict[str, Any], output_dir: Path) -> dict[str, Any]:
     }
 
 
-HTML_PAGE = """<!DOCTYPE html>
+HTML_PAGE = r"""<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>Wirra Bore — schematic</title>
+  <title>Wirra Bore — western NSW watering cell</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,650&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet"/>
   <style>
     :root {
-      --bg: #10140f;
-      --panel: #1a2218;
-      --ink: #e8eadf;
-      --muted: #9aa38c;
-      --line: #2c3628;
-      --power: #e0b44a;
-      --water: #4eb3c8;
-      --pv: #f0c14a;
-      --batt: #5cb87a;
-      --diesel: #d45b4c;
-      --load: #c9a66b;
-      --dam: #2f7f96;
-      --bore: #7f9aa6;
-      --paddock: #6a8a45;
-      --bus: #b5bba8;
-      --accent: #d8c078;
+      --bg: #14110d;
+      --panel: rgba(22, 19, 15, 0.92);
+      --ink: #f3ead6;
+      --muted: #b7a88a;
+      --line: rgba(243, 234, 214, 0.12);
+      --power: #e8c15a;
+      --water: #5ec4d4;
+      --accent: #e2c27a;
+      --diesel: #e07048;
+      --ok: #7dba6a;
     }
     * { box-sizing: border-box; }
     html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink);
-      font-family: "Segoe UI", system-ui, sans-serif; }
+      font-family: "IBM Plex Sans", system-ui, sans-serif; }
     body { display: grid; grid-template-rows: auto 1fr auto; min-height: 100%; }
-    header, footer { padding: 12px 20px; background: var(--panel); border-color: var(--line); }
-    header { display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap;
+    header, footer { padding: 14px 22px; background: var(--panel);
+      backdrop-filter: blur(12px); }
+    header { display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
       border-bottom: 1px solid var(--line); }
-    header h1 { font-size: 1.15rem; margin: 0; letter-spacing: 0.04em; font-weight: 600; }
-    header p { margin: 0; color: var(--muted); font-size: 0.85rem; }
-    #policy { margin-left: auto; display: flex; gap: 6px; }
+    header h1 { font-family: Fraunces, Georgia, serif; font-size: 1.35rem; margin: 0;
+      font-weight: 650; letter-spacing: 0.01em; }
+    header p { margin: 2px 0 0; color: var(--muted); font-size: 0.78rem; }
+    .brand { display: flex; flex-direction: column; }
+    #policy { margin-left: auto; display: flex; gap: 0; background: #1c1813;
+      border: 1px solid var(--line); border-radius: 999px; padding: 3px; }
     #policy button {
-      background: transparent; color: var(--muted); border: 1px solid var(--line);
-      border-radius: 999px; padding: 6px 14px; cursor: pointer; font: inherit;
+      background: transparent; color: var(--muted); border: 0;
+      border-radius: 999px; padding: 7px 16px; cursor: pointer; font: inherit;
+      font-size: 0.82rem; font-weight: 500; transition: background 0.2s, color 0.2s;
     }
-    #policy button.active { background: var(--accent); color: #1a1608; border-color: var(--accent); }
-    #policy button:disabled { opacity: 0.4; cursor: not-allowed; }
-    main { display: grid; grid-template-columns: 1fr 280px; min-height: 0; }
-    #schematic { width: 100%; height: 100%; min-height: 520px; }
-    aside { border-left: 1px solid var(--line); padding: 14px 16px; overflow: auto;
-      background: #141a13; font-variant-numeric: tabular-nums; }
-    aside h2 { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.12em;
-      color: var(--muted); margin: 0 0 8px; }
-    aside dl { margin: 0 0 16px; display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; }
-    aside dt { color: var(--muted); font-size: 0.8rem; }
-    aside dd { margin: 0; font-size: 0.85rem; text-align: right; }
+    #policy button.active { background: var(--accent); color: #1a1408; }
+    #policy button:disabled { opacity: 0.35; cursor: not-allowed; }
+    main { display: grid; grid-template-columns: 1fr minmax(280px, 320px); min-height: 0; }
+    #schematic { width: 100%; height: 100%; min-height: 560px; display: block; }
+    aside { border-left: 1px solid var(--line); padding: 18px 18px 24px; overflow: auto;
+      background: #17130f; font-variant-numeric: tabular-nums; }
+    aside h2 { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.16em;
+      color: var(--muted); margin: 18px 0 8px; font-weight: 600; }
+    aside h2:first-child { margin-top: 0; }
+    aside dl { margin: 0 0 4px; display: grid; grid-template-columns: 1fr auto; gap: 7px 12px; }
+    aside dt { color: var(--muted); font-size: 0.78rem; }
+    aside dd { margin: 0; font-size: 0.82rem; text-align: right; font-weight: 500; }
     aside .warn { color: var(--diesel); }
-    footer { display: flex; align-items: center; gap: 14px; border-top: 1px solid var(--line); }
+    .meter { height: 6px; background: #2a241c; border-radius: 99px; overflow: hidden; margin: 6px 0 14px; }
+    .meter > i { display: block; height: 100%; border-radius: 99px; background: var(--water);
+      width: 0; transition: width 0.45s ease; }
+    .meter.soc > i { background: var(--ok); }
+    footer { display: flex; align-items: center; gap: 16px; border-top: 1px solid var(--line); }
     #btn-play {
-      min-width: 76px; padding: 8px 12px; border-radius: 8px; border: 0;
-      background: var(--accent); color: #1a1608; font: inherit; font-weight: 600; cursor: pointer;
+      min-width: 88px; padding: 9px 16px; border-radius: 999px; border: 0;
+      background: var(--accent); color: #1a1408; font: inherit; font-weight: 600; cursor: pointer;
     }
-    #hour { flex: 1; accent-color: var(--accent); }
-    #hour-label { min-width: 220px; color: var(--muted); font-size: 0.85rem; }
-    .node-label { fill: var(--ink); font-size: 11px; font-family: inherit; }
-    .node-sub { fill: var(--muted); font-size: 10px; font-family: inherit; }
-    .edge-power { stroke: var(--power); fill: none; stroke-linecap: round; }
-    .edge-water { stroke: var(--water); fill: none; stroke-linecap: round; }
-    .edge-idle { opacity: 0.22; }
-    .flow-on { stroke-dasharray: 7 8; animation: dash 0.9s linear infinite; }
-    @keyframes dash { to { stroke-dashoffset: -15; } }
-    .banner { fill: #c45c4c; font-size: 14px; }
+    #hour { flex: 1; accent-color: var(--accent); height: 6px; }
+    #hour-label { min-width: 240px; color: var(--muted); font-size: 0.82rem; }
+    .chip { display: inline-block; padding: 2px 8px; border-radius: 99px; background: #2a241c;
+      font-size: 0.72rem; color: var(--accent); letter-spacing: 0.04em; }
+    .node-label { fill: #3a2c1c; font-size: 11px; font-family: "IBM Plex Sans", sans-serif; font-weight: 600; }
+    .node-sub { fill: #5c4a32; font-size: 10px; font-family: "IBM Plex Sans", sans-serif; }
+    .lbl-halo { fill: rgba(255,248,230,0.86); }
+    .edge-power { stroke: var(--power); fill: none; stroke-linecap: round; opacity: 0.9; }
+    .edge-water { stroke: var(--water); fill: none; stroke-linecap: round; opacity: 0.9; }
+    .edge-idle { opacity: 0.18; }
+    .flow-on { stroke-dasharray: 8 10; animation: dash 0.85s linear infinite; }
+    .flow-on.edge-water { animation-duration: 1.15s; }
+    @keyframes dash { to { stroke-dashoffset: -36; } }
+    @keyframes pump { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+    @keyframes shimmer { 0%,100% { opacity: 0.75; } 50% { opacity: 1; } }
+    @keyframes stack { 0%,100% { opacity: 0.35; transform: translateY(0); } 50% { opacity: 0.9; transform: translateY(-6px); } }
+    @keyframes ripple { 0%,100% { transform: scale(1); opacity: 0.35; } 50% { transform: scale(1.06); opacity: 0.6; } }
+    .on-pump .pump-head { animation: pump 0.55s ease-in-out infinite; }
+    .on-pv .panel { animation: shimmer 2.2s ease-in-out infinite; }
+    .on-diesel .smoke { animation: stack 1.4s ease-in-out infinite; }
+    .on-dam .water-shine { animation: shimmer 3s ease-in-out infinite; }
+    .win-on { fill: #f6e39a !important; filter: url(#glow); }
+    .banner { fill: #c45c4c; font-size: 14px; font-family: "IBM Plex Sans", sans-serif; }
   </style>
 </head>
 <body>
   <header>
-    <h1>Wirra Bore schematic</h1>
-    <p>layout.nodes · homestead pv battery diesel dam bore_a bore_b north creek dam_paddock back</p>
+    <div class="brand">
+      <h1>Wirra Bore</h1>
+      <p>western NSW watering cell · homestead · yards · turkey-nest dam</p>
+    </div>
+    <span class="chip" id="tod-chip">day</span>
     <div id="policy">
       <button type="button" id="btn-dumb" data-policy="dumb" disabled title="No output/dispatch_dumb.json">Dumb</button>
       <button type="button" id="btn-greedy" class="active" data-policy="greedy">Greedy</button>
@@ -203,7 +226,7 @@ HTML_PAGE = """<!DOCTYPE html>
     </div>
   </header>
   <main>
-    <svg id="schematic" viewBox="0 0 1040 640" role="img" aria-label="Site schematic">
+    <svg id="schematic" viewBox="0 0 1080 700" role="img" aria-label="Wirra Bore station schematic">
       <title>Wirra Bore site graph</title>
     </svg>
     <aside id="readout"></aside>
@@ -215,8 +238,20 @@ HTML_PAGE = """<!DOCTYPE html>
   </footer>
   <script>
   const NODE_IDS = ["homestead","pv","battery","diesel","dam","bore_a","bore_b","north","creek","dam_paddock","back"];
-  const SCALE = 1.85, PAD_X = 70, PAD_Y = 40;
+  const SCALE = 1.85, PAD_X = 70, PAD_Y = 55;
+  const NS = "http://www.w3.org/2000/svg";
   let payload = null, policy = "greedy", hour = 0, playing = false, timer = null;
+
+  function E(tag, a, kids) {
+    const n = document.createElementNS(NS, tag);
+    if (a) Object.keys(a).forEach(function (k) { if (a[k] != null && a[k] !== "") n.setAttribute(k, a[k]); });
+    (kids || []).forEach(function (c) {
+      if (c == null) return;
+      if (typeof c === "string") n.appendChild(document.createTextNode(c));
+      else n.appendChild(c);
+    });
+    return n;
+  }
 
   function pos(id) {
     const n = id === "bus" ? payload.bus : payload.nodes[id];
@@ -287,28 +322,6 @@ HTML_PAGE = """<!DOCTYPE html>
     return (payload.nodes[id] && payload.nodes[id].kind) || "load";
   }
 
-  function fillFor(id, fl) {
-    const kind = nodeKind(id);
-    if (kind === "pv") return fl.pv > 0.2 ? "#f0c14a" : "#5a5330";
-    if (kind === "battery") {
-      const frac = payload.battery_kwh ? fl.S / payload.battery_kwh : 0;
-      return frac > 0.4 ? "#5cb87a" : "#3d6a4a";
-    }
-    if (kind === "diesel") return fl.g > 0.05 ? "#d45b4c" : "#5a3532";
-    if (kind === "load") return fl.load > 8 ? "#c9a66b" : "#6d5b3c";
-    if (kind === "dam") {
-      const spill = payload.dam_spill_kl || 10000;
-      return fl.V / spill > 0.4 ? "#2f7f96" : "#3a4e55";
-    }
-    if (kind === "bore") {
-      const on = id === "bore_a" ? fl.uA : fl.uB;
-      return on ? "#7fbfc8" : "#3d4a4e";
-    }
-    if (kind === "paddock") return id === "back" ? "#3a4630" : "#6a8a45";
-    if (kind === "bus") return "#b5bba8";
-    return "#445";
-  }
-
   function subtitle(id, fl, t) {
     const d = dispatch() || {};
     if (id === "pv") return fmt(fl.pv, 1) + " kW";
@@ -318,7 +331,7 @@ HTML_PAGE = """<!DOCTYPE html>
     if (id === "dam") return fmt(fl.V, 0) + " kL";
     if (id === "bore_a") return fl.uA ? "ON 4 L/s" : "off";
     if (id === "bore_b") return fl.uB ? "ON 6 L/s" : "off";
-    if (id === "bus") return "AC bus";
+    if (id === "bus") return "switchboard";
     if (payload.headers.indexOf(id) >= 0) {
       const w = atMap((d.W_kl || {}), id, t, 0);
       const dem = atMap(((series() || {}).demand_kl_per_h || {}), id, t, 0);
@@ -327,81 +340,208 @@ HTML_PAGE = """<!DOCTYPE html>
     return "";
   }
 
+  function prettyName(id) {
+    return {
+      homestead: "Homestead",
+      pv: "PV array",
+      battery: "Battery",
+      diesel: "Diesel shed",
+      dam: "Turkey-nest dam",
+      bore_a: "Bore A",
+      bore_b: "Bore B",
+      north: "North paddock",
+      creek: "Creek paddock",
+      dam_paddock: "Dam paddock",
+      back: "Back paddock",
+      bus: "AC bus",
+    }[id] || id;
+  }
+
+  function hourPhase(h) {
+    const hr = h % 24;
+    if (hr < 5 || hr >= 21) return "night";
+    if (hr < 7) return "dawn";
+    if (hr < 17) return "day";
+    if (hr < 19) return "dusk";
+    return "night";
+  }
+
+  function addDefs(svg) {
+    const defs = E("defs");
+    defs.appendChild(E("linearGradient", { id: "skyGrad", x1: "0", y1: "0", x2: "0", y2: "1" }, [
+      E("stop", { id: "skyTop", offset: "0%", "stop-color": "#8ec4d8" }),
+      E("stop", { id: "skyBot", offset: "100%", "stop-color": "#f2ddb0" }),
+    ]));
+    defs.appendChild(E("linearGradient", { id: "earthGrad", x1: "0", y1: "0", x2: "0", y2: "1" }, [
+      E("stop", { offset: "0%", "stop-color": "#d7b07a" }),
+      E("stop", { offset: "100%", "stop-color": "#9a6d3c" }),
+    ]));
+    defs.appendChild(E("radialGradient", { id: "waterGrad", cx: "40%", cy: "35%", r: "70%" }, [
+      E("stop", { offset: "0%", "stop-color": "#8fd4de" }),
+      E("stop", { offset: "100%", "stop-color": "#2f7f8f" }),
+    ]));
+    defs.appendChild(E("filter", { id: "glow", x: "-40%", y: "-40%", width: "180%", height: "180%" }, [
+      E("feGaussianBlur", { stdDeviation: "2.2", result: "b" }),
+      E("feMerge", {}, [E("feMergeNode", { in: "b" }), E("feMergeNode", { in: "SourceGraphic" })]),
+    ]));
+    defs.appendChild(E("filter", { id: "soft", x: "-20%", y: "-20%", width: "140%", height: "140%" }, [
+      E("feDropShadow", { dx: "0", dy: "1.5", stdDeviation: "1.6", "flood-color": "#3a2a18", "flood-opacity": "0.35" }),
+    ]));
+    defs.appendChild(E("clipPath", { id: "damClip" }, [
+      E("ellipse", { cx: "0", cy: "4", rx: "46", ry: "22" }),
+    ]));
+    svg.appendChild(defs);
+  }
+
+  function labelPair(g, x, y, title, dy) {
+    const bg = E("rect", { class: "lbl-halo", x: x - 52, y: y + (dy || 28) - 11, width: 104, height: 28, rx: "6" });
+    g.appendChild(bg);
+    g.appendChild(E("text", { class: "node-label", x: x, y: y + (dy || 28), "text-anchor": "middle" }, [title]));
+    g.appendChild(E("text", { class: "node-sub", id: "sub-" + g.dataset.id, x: x, y: y + (dy || 28) + 12, "text-anchor": "middle" }));
+  }
+
+  function drawHouse(g, x, y) {
+    g.appendChild(E("ellipse", { cx: x + 4, cy: y + 28, rx: "48", ry: "10", fill: "#7d5a32", opacity: "0.25" }));
+    g.appendChild(E("rect", { x: x - 34, y: y - 2, width: "68", height: "26", fill: "#efe1c4", stroke: "#6a5438", "stroke-width": "1.2" }));
+    g.appendChild(E("polygon", { points: (x-40)+","+(y-2)+" "+x+","+(y-26)+" "+(x+40)+","+(y-2), fill: "#8c3b28", stroke: "#5a2418", "stroke-width": "1" }));
+    g.appendChild(E("rect", { x: x - 38, y: y + 16, width: "76", height: "4", fill: "#d9c39a" }));
+    g.appendChild(E("line", { x1: x - 28, y1: y + 16, x2: x - 28, y2: y + 26, stroke: "#6a5438", "stroke-width": "2" }));
+    g.appendChild(E("line", { x1: x + 28, y1: y + 16, x2: x + 28, y2: y + 26, stroke: "#6a5438", "stroke-width": "2" }));
+    g.appendChild(E("rect", { class: "win", x: x - 22, y: y + 4, width: "10", height: "10", fill: "#8fb4c4", stroke: "#5a4632" }));
+    g.appendChild(E("rect", { class: "win", x: x + 12, y: y + 4, width: "10", height: "10", fill: "#8fb4c4", stroke: "#5a4632" }));
+    g.appendChild(E("rect", { x: x - 4, y: y + 6, width: "8", height: "18", fill: "#6b4a32" }));
+    g.appendChild(E("rect", { x: x + 22, y: y - 22, width: "6", height: "12", fill: "#6a3224" }));
+    g.appendChild(E("ellipse", { cx: x - 48, cy: y + 18, rx: "9", ry: "12", fill: "#c9c2b3", stroke: "#6a5438" }));
+    g.appendChild(E("ellipse", { cx: x - 48, cy: y + 10, rx: "9", ry: "5", fill: "#9aa3a8" }));
+  }
+
+  function drawYards(g, x, y) {
+    const ox = x + 56, oy = y + 8;
+    g.appendChild(E("rect", { x: ox, y: oy, width: "52", height: "34", fill: "none", stroke: "#5c4630", "stroke-width": "2.2" }));
+    g.appendChild(E("line", { x1: ox + 26, y1: oy, x2: ox + 26, y2: oy + 34, stroke: "#5c4630", "stroke-width": "1.6" }));
+    g.appendChild(E("line", { x1: ox, y1: oy + 17, x2: ox + 52, y2: oy + 17, stroke: "#5c4630", "stroke-width": "1.6" }));
+    g.appendChild(E("text", { x: ox + 26, y: oy + 46, "text-anchor": "middle", fill: "#5c4630", "font-size": "9", "font-family": "IBM Plex Sans, sans-serif" }, ["cattle yards"]));
+  }
+
+  function drawPv(g, x, y) {
+    for (let i = 0; i < 3; i++) {
+      const px = x - 28 + i * 18;
+      g.appendChild(E("polygon", { class: "panel", points: px+","+(y+10)+" "+(px+22)+","+(y+4)+" "+(px+22)+","+(y-10)+" "+px+","+(y-4), fill: "#2a4e72", stroke: "#d8c078", "stroke-width": "1" }));
+    }
+    g.appendChild(E("line", { x1: x - 30, y1: y + 12, x2: x + 30, y2: y + 12, stroke: "#6a5438", "stroke-width": "3" }));
+  }
+
+  function drawBattery(g, x, y) {
+    g.appendChild(E("rect", { x: x - 22, y: y - 14, width: "44", height: "28", rx: "4", fill: "#3d4a3a", stroke: "#1e281c" }));
+    g.appendChild(E("rect", { id: "batt-fill", x: x - 18, y: y - 10, width: "36", height: "20", rx: "2", fill: "#5cb87a" }));
+    g.appendChild(E("rect", { x: x - 6, y: y - 18, width: "12", height: "5", rx: "1", fill: "#c9c2b3" }));
+  }
+
+  function drawDiesel(g, x, y) {
+    g.appendChild(E("rect", { x: x - 22, y: y - 8, width: "44", height: "22", fill: "#6b6e72", stroke: "#3a3c40" }));
+    g.appendChild(E("polygon", { points: (x-26)+","+(y-8)+" "+x+","+(y-20)+" "+(x+26)+","+(y-8), fill: "#5a5e62" }));
+    g.appendChild(E("rect", { class: "stack", x: x + 10, y: y - 28, width: "5", height: "14", fill: "#3a3c40" }));
+    g.appendChild(E("ellipse", { class: "smoke", cx: x + 12, cy: y - 32, rx: "5", ry: "3", fill: "#c9c2b3", opacity: "0.3" }));
+  }
+
+  function drawDam(g, x, y) {
+    g.appendChild(E("ellipse", { cx: x, cy: y + 6, rx: "58", ry: "28", fill: "#8a6236" }));
+    g.appendChild(E("ellipse", { cx: x, cy: y + 4, rx: "46", ry: "22", fill: "#6d4c2c" }));
+    const waterG = E("g", { "clip-path": "url(#damClip)", transform: "translate("+x+","+y+")" });
+    waterG.appendChild(E("ellipse", { id: "dam-water", class: "water-shine", cx: "0", cy: "4", rx: "44", ry: "20", fill: "url(#waterGrad)" }));
+    g.appendChild(waterG);
+    g.appendChild(E("ellipse", { cx: x, cy: y + 4, rx: "46", ry: "22", fill: "none", stroke: "#5a3c22", "stroke-width": "2" }));
+  }
+
+  function drawBore(g, x, y) {
+    const head = E("g", { class: "pump-head" });
+    head.appendChild(E("rect", { x: x - 10, y: y - 6, width: "20", height: "16", rx: "2", fill: "#8a9094", stroke: "#3a3c40" }));
+    head.appendChild(E("rect", { x: x - 3, y: y - 22, width: "6", height: "16", fill: "#6a6e72" }));
+    head.appendChild(E("circle", { cx: x, cy: y - 24, r: "7", fill: "#c9c2b3", stroke: "#5a5438" }));
+    g.appendChild(head);
+    g.appendChild(E("rect", { x: x + 8, y: y + 2, width: "14", height: "10", rx: "2", fill: "#9aa3a8", stroke: "#5a5438" }));
+  }
+
+  function drawPaddock(g, x, y, empty) {
+    const fill = empty ? "#8a9a6a" : "#6f8a44";
+    g.appendChild(E("rect", { x: x - 40, y: y - 22, width: "80", height: "44", rx: "8", fill: fill, stroke: "#4a5c30", "stroke-width": "1.6", "stroke-dasharray": "6 4", opacity: "0.92" }));
+    g.appendChild(E("rect", { x: x - 10, y: y + 6, width: "20", height: "8", rx: "2", fill: "#6aa0b0", stroke: "#3a5a62" }));
+    if (!empty) {
+      g.appendChild(E("ellipse", { cx: x - 18, cy: y - 4, rx: "6", ry: "4", fill: "#cfc6b0", opacity: "0.7" }));
+      g.appendChild(E("ellipse", { cx: x + 8, cy: y - 8, rx: "7", ry: "4", fill: "#d5ccb6", opacity: "0.7" }));
+    }
+  }
+
+  function drawBus(g, x, y) {
+    g.appendChild(E("rect", { x: x - 6, y: y - 28, width: "12", height: "40", fill: "#6a6e66" }));
+    g.appendChild(E("rect", { x: x - 16, y: y - 8, width: "32", height: "18", rx: "2", fill: "#2a2c28", stroke: "#d8c078" }));
+    g.appendChild(E("circle", { cx: x - 8, cy: y + 1, r: "3", fill: "#7dba6a" }));
+    g.appendChild(E("circle", { cx: x + 8, cy: y + 1, r: "3", fill: "#e8c15a" }));
+  }
+
+  function glyph(id, p) {
+    const g = E("g", { id: "node-" + id, "data-id": id, filter: "url(#soft)" });
+    g.dataset.id = id;
+    const kind = nodeKind(id);
+    if (id === "homestead") { drawHouse(g, p.x, p.y); drawYards(g, p.x, p.y); }
+    else if (kind === "pv") drawPv(g, p.x, p.y);
+    else if (kind === "battery") drawBattery(g, p.x, p.y);
+    else if (kind === "diesel") drawDiesel(g, p.x, p.y);
+    else if (kind === "dam") drawDam(g, p.x, p.y);
+    else if (kind === "bore") drawBore(g, p.x, p.y);
+    else if (kind === "paddock") drawPaddock(g, p.x, p.y, id === "back");
+    else if (kind === "bus") drawBus(g, p.x, p.y);
+    labelPair(g, p.x, p.y, prettyName(id), kind === "dam" ? 40 : 32);
+    return g;
+  }
+
   function buildSvg() {
     const svg = document.getElementById("schematic");
     svg.innerHTML = "";
-    const ns = "http://www.w3.org/2000/svg";
-    const bg = document.createElementNS(ns, "rect");
-    bg.setAttribute("width", "1040"); bg.setAttribute("height", "640");
-    bg.setAttribute("fill", "#10140f");
-    svg.appendChild(bg);
+    addDefs(svg);
+    svg.appendChild(E("rect", { id: "sky", width: "1080", height: "700", fill: "url(#skyGrad)" }));
+    svg.appendChild(E("path", { d: "M0 210 C 180 170 320 230 480 190 C 680 140 820 210 1080 160 L 1080 700 L 0 700 Z", fill: "url(#earthGrad)" }));
+    svg.appendChild(E("path", { d: "M0 250 C 200 220 400 280 600 240 C 800 200 960 260 1080 230 L 1080 700 L 0 700 Z", fill: "#c4a06a", opacity: "0.55" }));
+    svg.appendChild(E("path", { d: "M0 430 C 140 410 280 450 420 420 C 620 380 860 440 1080 400 L 1080 700 L 0 700 Z", fill: "#b48a52", opacity: "0.35" }));
 
     if (!payload) return;
     if (!payload.series || !payload.dispatch_greedy) {
-      const t = document.createElementNS(ns, "text");
-      t.setAttribute("x", "80"); t.setAttribute("y", "80"); t.setAttribute("class", "banner");
-      t.textContent = "Run python -m src.run first (missing output/series.json or dispatch_greedy.json)";
-      svg.appendChild(t);
+      svg.appendChild(E("text", { x: "80", y: "80", class: "banner" }, ["Run python -m src.run first (missing output/series.json or dispatch_greedy.json)"]));
     }
 
-    const gEdges = document.createElementNS(ns, "g");
-    gEdges.setAttribute("id", "edges");
+    const gEdges = E("g", { id: "edges" });
     svg.appendChild(gEdges);
     for (const e of payload.edges) {
       const a = pos(e.src), b = pos(e.dst);
-      const path = document.createElementNS(ns, "path");
-      const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
-      const d = "M " + a.x + " " + a.y + " Q " + mx + " " + (my - 8) + " " + b.x + " " + b.y;
-      path.setAttribute("id", e.id);
-      path.setAttribute("d", d);
-      path.setAttribute("class", e.domain === "power" ? "edge-power" : "edge-water");
-      path.setAttribute("stroke-width", "2.5");
-      gEdges.appendChild(path);
+      const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2 - (e.domain === "water" ? 18 : 10);
+      const d = "M " + a.x + " " + a.y + " Q " + mx + " " + my + " " + b.x + " " + b.y;
+      gEdges.appendChild(E("path", {
+        id: e.id, d: d,
+        class: e.domain === "power" ? "edge-power" : "edge-water",
+        "stroke-width": e.domain === "water" ? "4" : "2.6",
+      }));
     }
 
-    const gNodes = document.createElementNS(ns, "g");
-    gNodes.setAttribute("id", "nodes");
+    const gNodes = E("g", { id: "nodes" });
     svg.appendChild(gNodes);
-    const ids = NODE_IDS.concat(["bus"]);
-    for (const id of ids) {
-      const p = pos(id);
-      const g = document.createElementNS(ns, "g");
-      g.setAttribute("id", "node-" + id);
-      const kind = nodeKind(id);
-      const w = kind === "bus" ? 36 : (kind === "dam" ? 72 : 64);
-      const h = kind === "bus" ? 18 : 34;
-      const shape = document.createElementNS(ns, "rect");
-      shape.setAttribute("class", "glyph");
-      shape.setAttribute("x", p.x - w / 2);
-      shape.setAttribute("y", p.y - h / 2);
-      shape.setAttribute("width", w);
-      shape.setAttribute("height", h);
-      shape.setAttribute("rx", kind === "bus" ? 3 : 7);
-      shape.setAttribute("stroke", "#0b0e0a");
-      shape.setAttribute("stroke-width", "1.2");
-      g.appendChild(shape);
-      const label = document.createElementNS(ns, "text");
-      label.setAttribute("class", "node-label");
-      label.setAttribute("x", p.x);
-      label.setAttribute("y", p.y - h / 2 - 6);
-      label.setAttribute("text-anchor", "middle");
-      label.textContent = id;
-      g.appendChild(label);
-      const sub = document.createElementNS(ns, "text");
-      sub.setAttribute("class", "node-sub");
-      sub.setAttribute("id", "sub-" + id);
-      sub.setAttribute("x", p.x);
-      sub.setAttribute("y", p.y + 4);
-      sub.setAttribute("text-anchor", "middle");
-      g.appendChild(sub);
-      gNodes.appendChild(g);
-    }
+    NODE_IDS.concat(["bus"]).forEach(function (id) {
+      gNodes.appendChild(glyph(id, pos(id)));
+    });
   }
 
   function paint() {
     if (!payload) return;
     const t = hour;
     const fl = flows(t);
+    const phase = hourPhase(t);
+    const tod = { night: ["#0d1c2c", "#1a2430"], dawn: ["#e89b6a", "#f2ddb0"], day: ["#8ec4d8", "#f2ddb0"], dusk: ["#c46a48", "#e8b07a"] }[phase];
+    const st = document.getElementById("skyTop");
+    const sb = document.getElementById("skyBot");
+    if (st) st.setAttribute("stop-color", tod[0]);
+    if (sb) sb.setAttribute("stop-color", tod[1]);
+    const chip = document.getElementById("tod-chip");
+    if (chip) chip.textContent = phase;
+
     for (const e of payload.edges) {
       const el = document.getElementById(e.id);
       if (!el) continue;
@@ -409,51 +549,69 @@ HTML_PAGE = """<!DOCTYPE html>
       const on = mag > 1e-3;
       el.classList.toggle("edge-idle", !on);
       el.classList.toggle("flow-on", on);
-      el.setAttribute("stroke-width", String(on ? Math.min(7, 2 + mag / 6) : 2));
+      el.setAttribute("stroke-width", String(on ? Math.min(8, 2.4 + mag / 7) : (e.domain === "water" ? 4 : 2.6)));
     }
     for (const id of NODE_IDS.concat(["bus"])) {
       const g = document.getElementById("node-" + id);
       if (!g) continue;
-      const glyph = g.querySelector(".glyph");
-      if (glyph) glyph.setAttribute("fill", fillFor(id, fl));
+      g.classList.toggle("on-pv", id === "pv" && fl.pv > 0.4);
+      g.classList.toggle("on-diesel", id === "diesel" && fl.g > 0.05);
+      g.classList.toggle("on-pump", (id === "bore_a" && fl.uA) || (id === "bore_b" && fl.uB));
+      g.classList.toggle("on-dam", id === "dam");
+      g.querySelectorAll(".win").forEach(function (w) {
+        if (phase === "night" || phase === "dusk") w.classList.add("win-on");
+        else w.classList.remove("win-on");
+      });
       const sub = document.getElementById("sub-" + id);
       if (sub) sub.textContent = subtitle(id, fl, t);
     }
+    const bf = document.getElementById("batt-fill");
+    if (bf && payload.battery_kwh) {
+      const frac = Math.max(0.08, Math.min(1, fl.S / payload.battery_kwh));
+      bf.setAttribute("width", String(36 * frac));
+    }
+    const dw = document.getElementById("dam-water");
+    if (dw) {
+      const frac = Math.max(0.25, Math.min(1, fl.V / (payload.dam_spill_kl || 10000)));
+      dw.setAttribute("ry", String(20 * frac));
+    }
+
     const s = series() || {};
     const d = dispatch() || {};
     const ts = (s.timestamps && s.timestamps[t]) || "";
     document.getElementById("hour-label").textContent =
       "hour " + t + " / 47  ·  " + ts.replace("T", " ").slice(0, 19);
-    const unmet = payload.headers.reduce((acc, p) => acc + Number(atMap((d.unmet_kl || {}), p, t, 0)), 0);
+    const unmet = payload.headers.reduce(function (acc, p) { return acc + Number(atMap((d.unmet_kl || {}), p, t, 0)); }, 0);
     let kpis = payload.kpis || {};
     if (policy === "opt" && payload.kpis_opt) kpis = payload.kpis_opt;
     if (policy === "dumb" && payload.kpis_dumb) kpis = payload.kpis_dumb;
+    const socPct = payload.battery_kwh ? Math.max(0, Math.min(100, fl.S / payload.battery_kwh * 100)) : 0;
+    const damPct = payload.dam_spill_kl ? Math.max(0, Math.min(100, fl.V / payload.dam_spill_kl * 100)) : 0;
     document.getElementById("readout").innerHTML =
-      "<h2>Hour " + t + "</h2><dl>" +
-      "<dt>timestamp</dt><dd>" + (ts || "—") + "</dd>" +
+      "<h2>This hour</h2><dl>" +
+      "<dt>local time</dt><dd>" + (ts || "—") + "</dd>" +
       "<dt>policy</dt><dd>" + (d.policy || policy) + "</dd>" +
-      "<dt>PV</dt><dd>" + fmt(fl.pv, 2) + " kW</dd>" +
-      "<dt>homestead</dt><dd>" + fmt(fl.load, 2) + " kW</dd>" +
-      "<dt>diesel g</dt><dd>" + fmt(fl.g, 2) + " kW</dd>" +
-      "<dt>charge / discharge</dt><dd>" + fmt(fl.c, 2) + " / " + fmt(fl.dis, 2) + " kW</dd>" +
-      "<dt>SoC</dt><dd>" + fmt(fl.S, 2) + " kWh</dd>" +
-      "<dt>dam V</dt><dd>" + fmt(fl.V, 1) + " kL</dd>" +
-      "<dt>bore A / B</dt><dd>" + (fl.uA ? "on" : "off") + " / " + (fl.uB ? "on" : "off") + "</dd>" +
-      "<dt>air temp</dt><dd>" + fmt(fl.temp, 1) + " °C</dd>" +
-      "<dt>unmet this hour</dt><dd class='" + (unmet > 1e-9 ? "warn" : "") + "'>" + fmt(unmet, 3) + " kL</dd>" +
-      "</dl><h2>Paddock demand</h2><dl>" +
+      "<dt>air</dt><dd>" + fmt(fl.temp, 1) + " °C</dd>" +
+      "<dt>PV</dt><dd>" + fmt(fl.pv, 1) + " kW</dd>" +
+      "<dt>homestead</dt><dd>" + fmt(fl.load, 1) + " kW</dd>" +
+      "<dt>diesel</dt><dd>" + (fl.g > 0.05 ? fmt(fl.g, 1) + " kW" : "off") + "</dd>" +
+      "<dt>bores</dt><dd>" + (fl.uA ? "A on" : "A off") + " · " + (fl.uB ? "B on" : "B off") + "</dd>" +
+      "</dl>" +
+      "<h2>Battery</h2><div class='meter soc'><i style='width:" + socPct.toFixed(0) + "%'></i></div>" +
+      "<dl><dt>SoC</dt><dd>" + fmt(fl.S, 1) + " kWh</dd><dt>charge / dis</dt><dd>" + fmt(fl.c, 1) + " / " + fmt(fl.dis, 1) + "</dd></dl>" +
+      "<h2>Dam</h2><div class='meter'><i style='width:" + damPct.toFixed(0) + "%'></i></div>" +
+      "<dl><dt>volume</dt><dd>" + fmt(fl.V, 0) + " kL</dd>" +
+      "<dt>unmet</dt><dd class='" + (unmet > 1e-9 ? "warn" : "") + "'>" + fmt(unmet, 3) + " kL</dd></dl>" +
+      "<h2>Paddock troughs</h2><dl>" +
       payload.headers.map(function (p) {
         const dem = atMap((s.demand_kl_per_h || {}), p, t, 0);
         const w = atMap((d.W_kl || {}), p, t, 0);
-        return "<dt>" + p + "</dt><dd>" + fmt(w, 2) + " kL · D " + fmt(dem, 3) + " kL/h</dd>";
+        return "<dt>" + p + "</dt><dd>" + fmt(w, 1) + " kL · " + fmt(dem, 2) + " kL/h</dd>";
       }).join("") +
-      "</dl><h2>Run KPIs</h2><dl>" +
-      "<dt>diesel</dt><dd>" + fmt(kpis.diesel_litres, 2) + " L · $" + fmt(kpis.diesel_aud, 2) + "</dd>" +
-      "<dt>PV energy</dt><dd>" + fmt(kpis.pv_kwh, 1) + " kWh</dd>" +
-      "<dt>curtailment</dt><dd>" + fmt(kpis.pv_curtailed_kwh, 1) + " kWh</dd>" +
-      "<dt>min dam / SoC</dt><dd>" + fmt(kpis.min_dam_kl, 0) + " kL / " + fmt(kpis.min_soc_kwh, 1) + " kWh</dd>" +
-      "<dt>unmet total</dt><dd>" + fmt(kpis.unmet_kl_total, 3) + " kL</dd>" +
-      "<dt>PV used</dt><dd>" + fmt(kpis.pv_utilisation, 3) + " · pumped " + fmt(kpis.water_pumped_kl, 1) + " kL</dd>" +
+      "</dl><h2>Run</h2><dl>" +
+      "<dt>diesel</dt><dd>" + fmt(kpis.diesel_litres, 1) + " L · $" + fmt(kpis.diesel_aud, 0) + "</dd>" +
+      "<dt>PV</dt><dd>" + fmt(kpis.pv_kwh, 0) + " kWh</dd>" +
+      "<dt>curtail</dt><dd>" + fmt(kpis.pv_curtailed_kwh, 0) + " kWh</dd>" +
       "</dl>" + compareTable();
   }
 
@@ -463,14 +621,14 @@ HTML_PAGE = """<!DOCTYPE html>
     if (!g || !o) return "";
     function line(name, r) {
       if (!r) return "";
-      return "<dt>" + name + "</dt><dd>$" + fmt(r.objective_aud, 2) + " · " + fmt(r.diesel_litres, 1) + " L</dd>";
+      return "<dt>" + name + "</dt><dd>$" + fmt(r.objective_aud, 0) + " · " + fmt(r.diesel_litres, 1) + " L</dd>";
     }
     let html = "<h2>Baselines</h2><dl>" + line("dumb", d) + line("greedy", g) + line("MILP", o) + "</dl>";
     const suite = payload.suite && payload.suite.suite;
     if (suite && suite.length) {
       html += "<h2>Suite AUD</h2><dl>";
       suite.forEach(function (row) {
-        html += "<dt>" + row.name + "</dt><dd>D $" + fmt(row.dumb_objective_aud, 0) +
+        html += "<dt>" + row.name.replace("wirra-", "") + "</dt><dd>D $" + fmt(row.dumb_objective_aud, 0) +
           " · G $" + fmt(row.greedy_objective_aud, 0) +
           " · M $" + fmt(row.opt_objective_aud, 0) + "</dd>";
       });
