@@ -26,7 +26,7 @@ def test_html_contains_layout_nodes() -> None:
 
 
 def test_html_has_playback_controls() -> None:
-    for token in ("hour", "Play", "btn-play", "/api/payload", "bore_a", "dam", "btn-opt"):
+    for token in ("hour", "Play", "btn-play", "/api/payload", "bore_a", "dam", "btn-opt", "btn-dumb"):
         assert token in HTML_PAGE
 
 

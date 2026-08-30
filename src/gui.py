@@ -113,11 +113,14 @@ def build_payload(station: dict[str, Any], output_dir: Path) -> dict[str, Any]:
         "soc_max_frac": float(power["soc_max_frac"]),
         "inverter_ac_kw": float(power["inverter_ac_kw"]),
         "series": load_json(output_dir / "series.json"),
+        "dispatch_dumb": load_json(output_dir / "dispatch_dumb.json"),
         "dispatch_greedy": load_json(output_dir / "dispatch_greedy.json"),
         "dispatch_opt": load_json(output_dir / "dispatch_opt.json"),
         "kpis": load_json(output_dir / "kpis.json"),
+        "kpis_dumb": load_json(output_dir / "kpis_dumb.json"),
         "kpis_opt": load_json(output_dir / "kpis_opt.json"),
         "compare": load_json(output_dir / "compare.json"),
+        "suite": load_json(output_dir / "suite.json"),
     }
 
 
@@ -194,6 +197,7 @@ HTML_PAGE = """<!DOCTYPE html>
     <h1>Wirra Bore schematic</h1>
     <p>layout.nodes · homestead pv battery diesel dam bore_a bore_b north creek dam_paddock back</p>
     <div id="policy">
+      <button type="button" id="btn-dumb" data-policy="dumb" disabled title="No output/dispatch_dumb.json">Dumb</button>
       <button type="button" id="btn-greedy" class="active" data-policy="greedy">Greedy</button>
       <button type="button" id="btn-opt" data-policy="opt" disabled title="No output/dispatch_opt.json">Opt</button>
     </div>
@@ -221,6 +225,7 @@ HTML_PAGE = """<!DOCTYPE html>
 
   function dispatch() {
     if (policy === "opt" && payload.dispatch_opt) return payload.dispatch_opt;
+    if (policy === "dumb" && payload.dispatch_dumb) return payload.dispatch_dumb;
     return payload.dispatch_greedy;
   }
 
@@ -420,7 +425,9 @@ HTML_PAGE = """<!DOCTYPE html>
     document.getElementById("hour-label").textContent =
       "hour " + t + " / 47  ·  " + ts.replace("T", " ").slice(0, 19);
     const unmet = payload.headers.reduce((acc, p) => acc + Number(atMap((d.unmet_kl || {}), p, t, 0)), 0);
-    const kpis = (policy === "opt" && payload.kpis_opt) ? payload.kpis_opt : (payload.kpis || {});
+    let kpis = payload.kpis || {};
+    if (policy === "opt" && payload.kpis_opt) kpis = payload.kpis_opt;
+    if (policy === "dumb" && payload.kpis_dumb) kpis = payload.kpis_dumb;
     document.getElementById("readout").innerHTML =
       "<h2>Hour " + t + "</h2><dl>" +
       "<dt>timestamp</dt><dd>" + (ts || "—") + "</dd>" +
@@ -446,7 +453,19 @@ HTML_PAGE = """<!DOCTYPE html>
       "<dt>curtailment</dt><dd>" + fmt(kpis.pv_curtailed_kwh, 1) + " kWh</dd>" +
       "<dt>min dam / SoC</dt><dd>" + fmt(kpis.min_dam_kl, 0) + " kL / " + fmt(kpis.min_soc_kwh, 1) + " kWh</dd>" +
       "<dt>unmet total</dt><dd>" + fmt(kpis.unmet_kl_total, 3) + " kL</dd>" +
-      "</dl>";
+      "<dt>PV used</dt><dd>" + fmt(kpis.pv_utilisation, 3) + " · pumped " + fmt(kpis.water_pumped_kl, 1) + " kL</dd>" +
+      "</dl>" + compareTable();
+  }
+
+  function compareTable() {
+    const c = payload.compare || {};
+    const d = c.dumb, g = c.greedy, o = c.opt;
+    if (!g || !o) return "";
+    function line(name, r) {
+      if (!r) return "";
+      return "<dt>" + name + "</dt><dd>$" + fmt(r.objective_aud, 2) + " · " + fmt(r.diesel_litres, 1) + " L</dd>";
+    }
+    return "<h2>Baselines</h2><dl>" + line("dumb", d) + line("greedy", g) + line("MILP", o) + "</dl>";
   }
 
   function setHour(h) {
@@ -470,9 +489,12 @@ HTML_PAGE = """<!DOCTYPE html>
 
   function setPolicy(next) {
     if (next === "opt" && !payload.dispatch_opt) return;
+    if (next === "dumb" && !payload.dispatch_dumb) return;
     policy = next;
     document.getElementById("btn-greedy").classList.toggle("active", policy === "greedy");
     document.getElementById("btn-opt").classList.toggle("active", policy === "opt");
+    const db = document.getElementById("btn-dumb");
+    if (db) db.classList.toggle("active", policy === "dumb");
     paint();
   }
 
@@ -488,6 +510,14 @@ HTML_PAGE = """<!DOCTYPE html>
       btn.disabled = false;
       btn.title = "Optimiser dispatch (sprint 2 artefact)";
     }
+    if (payload.dispatch_dumb) {
+      const btn = document.getElementById("btn-dumb");
+      btn.disabled = false;
+      btn.title = "Dumb diesel baseline";
+    }
+    const sky = (payload.series && payload.series.sky) ? payload.series.sky : "";
+    const meta = document.querySelector("header p");
+    if (meta && sky) meta.textContent += " · sky " + sky;
     buildSvg();
     setHour(0);
   }
@@ -500,6 +530,7 @@ HTML_PAGE = """<!DOCTYPE html>
   });
   document.getElementById("btn-greedy").addEventListener("click", function () { setPolicy("greedy"); });
   document.getElementById("btn-opt").addEventListener("click", function () { setPolicy("opt"); });
+  document.getElementById("btn-dumb").addEventListener("click", function () { setPolicy("dumb"); });
   boot();
   </script>
 </body>
