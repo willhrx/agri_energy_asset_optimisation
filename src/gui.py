@@ -168,7 +168,23 @@ HTML_PAGE = r"""<!DOCTYPE html>
     #policy button.active { background: var(--accent); color: #1a1408; }
     #policy button:disabled { opacity: 0.35; cursor: not-allowed; }
     main { display: grid; grid-template-columns: 1fr minmax(280px, 320px); min-height: 0; }
-    #schematic { width: 100%; height: 100%; min-height: 560px; display: block; }
+    #stage { position: relative; min-height: 0; background: #1a1610; overflow: hidden; }
+    #schematic { width: 100%; height: 100%; min-height: 560px; display: block;
+      cursor: grab; touch-action: none; user-select: none; }
+    #schematic.is-panning { cursor: grabbing; }
+    .zoom-dock {
+      position: absolute; left: 14px; bottom: 14px; display: flex; gap: 6px; align-items: center;
+      background: rgba(22, 19, 15, 0.82); border: 1px solid var(--line); border-radius: 999px;
+      padding: 4px 6px 4px 8px; backdrop-filter: blur(10px);
+    }
+    .zoom-dock button {
+      width: 32px; height: 32px; border: 0; border-radius: 999px; cursor: pointer;
+      background: #2a241c; color: var(--ink); font: 600 16px "IBM Plex Sans", sans-serif;
+    }
+    .zoom-dock button:hover { background: var(--accent); color: #1a1408; }
+    #zoom-label { min-width: 48px; text-align: center; font-size: 0.75rem; color: var(--muted); font-weight: 600; }
+    .zoom-hint { position: absolute; right: 14px; bottom: 18px; color: var(--muted);
+      font-size: 0.72rem; letter-spacing: 0.04em; pointer-events: none; opacity: 0.75; }
     aside { border-left: 1px solid var(--line); padding: 18px 18px 24px; overflow: auto;
       background: #17130f; font-variant-numeric: tabular-nums; }
     aside h2 { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.16em;
@@ -226,9 +242,18 @@ HTML_PAGE = r"""<!DOCTYPE html>
     </div>
   </header>
   <main>
-    <svg id="schematic" viewBox="0 0 1080 700" role="img" aria-label="Wirra Bore station schematic">
-      <title>Wirra Bore site graph</title>
-    </svg>
+    <div id="stage">
+      <svg id="schematic" viewBox="0 0 1080 700" role="img" aria-label="Wirra Bore station schematic">
+        <title>Wirra Bore site graph</title>
+      </svg>
+      <div class="zoom-dock">
+        <button type="button" id="btn-zoom-out" title="Zoom out">−</button>
+        <span id="zoom-label">100%</span>
+        <button type="button" id="btn-zoom-in" title="Zoom in">+</button>
+        <button type="button" id="btn-zoom-fit" title="Fit station">Fit</button>
+      </div>
+      <div class="zoom-hint">scroll to zoom · drag to pan · double-click a building</div>
+    </div>
     <aside id="readout"></aside>
   </main>
   <footer>
@@ -499,18 +524,19 @@ HTML_PAGE = r"""<!DOCTYPE html>
     const svg = document.getElementById("schematic");
     svg.innerHTML = "";
     addDefs(svg);
-    svg.appendChild(E("rect", { id: "sky", width: "1080", height: "700", fill: "url(#skyGrad)" }));
-    svg.appendChild(E("path", { d: "M0 210 C 180 170 320 230 480 190 C 680 140 820 210 1080 160 L 1080 700 L 0 700 Z", fill: "url(#earthGrad)" }));
-    svg.appendChild(E("path", { d: "M0 250 C 200 220 400 280 600 240 C 800 200 960 260 1080 230 L 1080 700 L 0 700 Z", fill: "#c4a06a", opacity: "0.55" }));
-    svg.appendChild(E("path", { d: "M0 430 C 140 410 280 450 420 420 C 620 380 860 440 1080 400 L 1080 700 L 0 700 Z", fill: "#b48a52", opacity: "0.35" }));
+    const world = E("g", { id: "world" });
+    world.appendChild(E("rect", { id: "sky", width: "1080", height: "700", fill: "url(#skyGrad)" }));
+    world.appendChild(E("path", { d: "M0 210 C 180 170 320 230 480 190 C 680 140 820 210 1080 160 L 1080 700 L 0 700 Z", fill: "url(#earthGrad)" }));
+    world.appendChild(E("path", { d: "M0 250 C 200 220 400 280 600 240 C 800 200 960 260 1080 230 L 1080 700 L 0 700 Z", fill: "#c4a06a", opacity: "0.55" }));
+    world.appendChild(E("path", { d: "M0 430 C 140 410 280 450 420 420 C 620 380 860 440 1080 400 L 1080 700 L 0 700 Z", fill: "#b48a52", opacity: "0.35" }));
 
     if (!payload) return;
     if (!payload.series || !payload.dispatch_greedy) {
-      svg.appendChild(E("text", { x: "80", y: "80", class: "banner" }, ["Run python -m src.run first (missing output/series.json or dispatch_greedy.json)"]));
+      world.appendChild(E("text", { x: "80", y: "80", class: "banner" }, ["Run python -m src.run first (missing output/series.json or dispatch_greedy.json)"]));
     }
 
     const gEdges = E("g", { id: "edges" });
-    svg.appendChild(gEdges);
+    world.appendChild(gEdges);
     for (const e of payload.edges) {
       const a = pos(e.src), b = pos(e.dst);
       const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2 - (e.domain === "water" ? 18 : 10);
@@ -523,10 +549,12 @@ HTML_PAGE = r"""<!DOCTYPE html>
     }
 
     const gNodes = E("g", { id: "nodes" });
-    svg.appendChild(gNodes);
+    world.appendChild(gNodes);
     NODE_IDS.concat(["bus"]).forEach(function (id) {
       gNodes.appendChild(glyph(id, pos(id)));
     });
+    svg.appendChild(world);
+    applyCam(true);
   }
 
   function paint() {
@@ -656,6 +684,121 @@ HTML_PAGE = r"""<!DOCTYPE html>
     }
   }
 
+  const K_MIN = 0.55, K_MAX = 4.2, VB_W = 1080, VB_H = 700;
+  let cam = { x: 0, y: 0, k: 1 }, camT = { x: 0, y: 0, k: 1 };
+  let camRaf = 0, panning = false, panLast = null, panMoved = false;
+
+  function applyCam(snap) {
+    if (snap) { cam.x = camT.x; cam.y = camT.y; cam.k = camT.k; }
+    const g = document.getElementById("world");
+    if (g) g.setAttribute("transform", "translate(" + cam.x.toFixed(2) + " " + cam.y.toFixed(2) + ") scale(" + cam.k.toFixed(4) + ")");
+    const lab = document.getElementById("zoom-label");
+    if (lab) lab.textContent = Math.round(cam.k * 100) + "%";
+  }
+
+  function tickCam() {
+    camRaf = 0;
+    cam.x += (camT.x - cam.x) * 0.22;
+    cam.y += (camT.y - cam.y) * 0.22;
+    cam.k += (camT.k - cam.k) * 0.22;
+    applyCam(false);
+    if (Math.abs(cam.x - camT.x) + Math.abs(cam.y - camT.y) + Math.abs(cam.k - camT.k) * 80 > 0.04) {
+      camRaf = requestAnimationFrame(tickCam);
+    } else {
+      applyCam(true);
+    }
+  }
+
+  function requestCam() {
+    if (!camRaf) camRaf = requestAnimationFrame(tickCam);
+  }
+
+  function clampCam() {
+    camT.k = Math.min(K_MAX, Math.max(K_MIN, camT.k));
+    const maxX = VB_W * 0.35, maxY = VB_H * 0.35;
+    camT.x = Math.min(maxX, Math.max(-VB_W * camT.k + VB_W * 0.65, camT.x));
+    camT.y = Math.min(maxY, Math.max(-VB_H * camT.k + VB_H * 0.65, camT.y));
+  }
+
+  function svgPoint(evt) {
+    const svg = document.getElementById("schematic");
+    const pt = svg.createSVGPoint();
+    pt.x = evt.clientX; pt.y = evt.clientY;
+    const m = svg.getScreenCTM();
+    if (!m) return { x: VB_W / 2, y: VB_H / 2 };
+    return pt.matrixTransform(m.inverse());
+  }
+
+  function zoomAt(pt, factor) {
+    const nk = Math.min(K_MAX, Math.max(K_MIN, camT.k * factor));
+    const wx = (pt.x - camT.x) / camT.k;
+    const wy = (pt.y - camT.y) / camT.k;
+    camT.k = nk;
+    camT.x = pt.x - wx * nk;
+    camT.y = pt.y - wy * nk;
+    clampCam();
+    requestCam();
+  }
+
+  function fitView() {
+    camT.x = 0; camT.y = 0; camT.k = 1;
+    requestCam();
+  }
+
+  function bindCamera() {
+    const svg = document.getElementById("schematic");
+    svg.addEventListener("wheel", function (e) {
+      e.preventDefault();
+      const factor = Math.exp(-e.deltaY * 0.0016);
+      zoomAt(svgPoint(e), factor);
+    }, { passive: false });
+    svg.addEventListener("pointerdown", function (e) {
+      if (e.button !== 0) return;
+      panning = true; panMoved = false;
+      panLast = { x: e.clientX, y: e.clientY };
+      svg.classList.add("is-panning");
+      svg.setPointerCapture(e.pointerId);
+    });
+    svg.addEventListener("pointermove", function (e) {
+      if (!panning || !panLast) return;
+      const dx = e.clientX - panLast.x, dy = e.clientY - panLast.y;
+      if (Math.abs(dx) + Math.abs(dy) > 3) panMoved = true;
+      const ctm = svg.getScreenCTM();
+      const sx = ctm ? ctm.a : 1, sy = ctm ? ctm.d : 1;
+      camT.x += dx / sx;
+      camT.y += dy / sy;
+      clampCam();
+      cam.x = camT.x; cam.y = camT.y; cam.k = camT.k;
+      panLast = { x: e.clientX, y: e.clientY };
+      applyCam(true);
+    });
+    function endPan(e) {
+      if (!panning) return;
+      panning = false; panLast = null;
+      svg.classList.remove("is-panning");
+      try { svg.releasePointerCapture(e.pointerId); } catch (err) {}
+    }
+    svg.addEventListener("pointerup", endPan);
+    svg.addEventListener("pointercancel", endPan);
+    svg.addEventListener("dblclick", function (e) {
+      e.preventDefault();
+      zoomAt(svgPoint(e), 1.55);
+    });
+    document.getElementById("btn-zoom-in").addEventListener("click", function () {
+      zoomAt({ x: VB_W / 2, y: VB_H / 2 }, 1.22);
+    });
+    document.getElementById("btn-zoom-out").addEventListener("click", function () {
+      zoomAt({ x: VB_W / 2, y: VB_H / 2 }, 1 / 1.22);
+    });
+    document.getElementById("btn-zoom-fit").addEventListener("click", fitView);
+    window.addEventListener("keydown", function (e) {
+      if (e.target && (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA")) return;
+      if (e.key === "+" || e.key === "=") zoomAt({ x: VB_W / 2, y: VB_H / 2 }, 1.18);
+      if (e.key === "-" || e.key === "_") zoomAt({ x: VB_W / 2, y: VB_H / 2 }, 1 / 1.18);
+      if (e.key === "0") fitView();
+    });
+  }
+
   function setPolicy(next) {
     if (next === "opt" && !payload.dispatch_opt) return;
     if (next === "dumb" && !payload.dispatch_dumb) return;
@@ -688,6 +831,7 @@ HTML_PAGE = r"""<!DOCTYPE html>
     const meta = document.querySelector("header p");
     if (meta && sky) meta.textContent += " · sky " + sky;
     buildSvg();
+    bindCamera();
     setHour(0);
   }
 
