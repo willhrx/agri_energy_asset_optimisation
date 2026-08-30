@@ -28,7 +28,19 @@ def compute_kpis(station: dict[str, Any], series: dict[str, Any], dispatch: dict
 
     diesel_aud = diesel_litres * float(station["objective"]["diesel_aud_per_litre"])
     pv_kwh = float(sum(series["pv_kw"])) * dt
+    pv_used_kwh = float(sum(dispatch["pv_used_kw"])) * dt
     pv_curtailed_kwh = float(sum(dispatch["pv_curtailed_kw"])) * dt
+    q_a = float(station["water"]["bores"]["bore_a"]["litres_per_s"]) * 3.6
+    q_b = float(station["water"]["bores"]["bore_b"]["litres_per_s"]) * 3.6
+    water_pumped_kl = 0.0
+    bore_hours_a = 0
+    bore_hours_b = 0
+    for t, ua in enumerate(dispatch["uA"]):
+        ub = dispatch["uB"][t]
+        water_pumped_kl += (q_a * ua + q_b * ub) * dt
+        bore_hours_a += int(ua)
+        bore_hours_b += int(ub)
+    peak_diesel_kw = float(max(dispatch["g_kw"]) if dispatch["g_kw"] else 0.0)
 
     dam_trace = list(dispatch["V_kl"]) + [dispatch["V_kl_end"][-1]]
     soc_trace = list(dispatch["S_kwh"]) + [dispatch["S_kwh_end"][-1]]
@@ -56,11 +68,17 @@ def compute_kpis(station: dict[str, Any], series: dict[str, Any], dispatch: dict
         "diesel_litres": diesel_litres,
         "diesel_aud": diesel_aud,
         "pv_kwh": pv_kwh,
+        "pv_used_kwh": pv_used_kwh,
         "pv_curtailed_kwh": pv_curtailed_kwh,
+        "pv_utilisation": (pv_used_kwh / pv_kwh) if pv_kwh > 1e-9 else 0.0,
         "min_dam_kl": min_dam_kl,
         "min_soc_kwh": min_soc_kwh,
         "unmet_kl_total": unmet_total,
         "hours_diesel_on": hours_diesel_on,
+        "peak_diesel_kw": peak_diesel_kw,
+        "water_pumped_kl": water_pumped_kl,
+        "bore_hours_a": bore_hours_a,
+        "bore_hours_b": bore_hours_b,
         "objective_aud": diesel_aud + penalty * unmet_total,
     }
     if unmet_total > 1e-9:
@@ -82,7 +100,12 @@ def print_kpis(kpis: dict[str, Any]) -> None:
     if "objective_aud" in kpis:
         print(f"  objective_aud     {kpis['objective_aud']:.2f} AUD")
     print(f"  pv_kwh            {kpis['pv_kwh']:.2f} kWh")
+    print(f"  pv_used_kwh       {kpis.get('pv_used_kwh', 0.0):.2f} kWh")
     print(f"  pv_curtailed_kwh  {kpis['pv_curtailed_kwh']:.2f} kWh")
+    print(f"  pv_utilisation    {kpis.get('pv_utilisation', 0.0):.3f}")
+    print(f"  water_pumped_kl   {kpis.get('water_pumped_kl', 0.0):.2f} kL")
+    print(f"  bore_hours        A {kpis.get('bore_hours_a', 0)}  B {kpis.get('bore_hours_b', 0)}")
+    print(f"  peak_diesel_kw    {kpis.get('peak_diesel_kw', 0.0):.2f}")
     print(f"  min_dam_kl        {kpis['min_dam_kl']:.2f} kL")
     print(f"  min_soc_kwh       {kpis['min_soc_kwh']:.2f} kWh")
     print(f"  unmet_kl_total    {kpis['unmet_kl_total']:.4f} kL")

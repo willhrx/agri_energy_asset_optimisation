@@ -203,8 +203,20 @@ def paddock_demand_kl(
     return out
 
 
-def generate_series(station: dict[str, Any], scenario: str | None = None) -> dict[str, Any]:
+def generate_series(
+    station: dict[str, Any],
+    scenario: str | None = None,
+    sky: str | None = None,
+    temp_min_c: float | None = None,
+    temp_max_c: float | None = None,
+) -> dict[str, Any]:
     run = _run_cfg(station, scenario)
+    if sky:
+        run["sky"] = sky
+    if temp_min_c is not None:
+        run["temp_min_c"] = temp_min_c
+    if temp_max_c is not None:
+        run["temp_max_c"] = temp_max_c
     scenario_name = str(run["name"])
     index = _hourly_index(station, run)
     tmin = float(run["temp_min_c"])

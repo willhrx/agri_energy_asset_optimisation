@@ -97,6 +97,7 @@ def plot_compare(
     opt: dict[str, Any],
     station: dict[str, Any],
     path: str | Path,
+    dumb: dict[str, Any] | None = None,
 ) -> Path:
     n = len(series["timestamps"])
     x = list(range(n))
@@ -106,6 +107,8 @@ def plot_compare(
     fig, axes = plt.subplots(4, 1, figsize=(12, 11), sharex=True, constrained_layout=True)
 
     ax = axes[0]
+    if dumb is not None:
+        ax.plot(x, dumb["g_kw"], label="Dumb diesel", color="0.45", alpha=0.8)
     ax.plot(x, greedy["g_kw"], label="Greedy diesel", color="tab:red", alpha=0.85)
     ax.plot(x, opt["g_kw"], label="MILP diesel", color="tab:orange", linestyle="--")
     ax.set_ylabel("kW")
@@ -145,7 +148,34 @@ def plot_compare(
     ax.set_xticklabels(tick_labels, rotation=30, ha="right")
     ax.set_xlim(0, n - 1)
 
-    fig.suptitle(f"{station['station_id']}  {series.get('scenario', '')}  greedy vs MILP", fontsize=12)
+    fig.suptitle(f"{station['station_id']}  {series.get('scenario', '')}  baselines", fontsize=12)
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(path, dpi=120)
+    plt.close(fig)
+    return path
+
+
+def plot_suite(rows: list[dict[str, Any]], path: str | Path) -> Path:
+    """Grouped bars: objective AUD by scenario × policy."""
+    names = [r["name"] for r in rows]
+    policies = ["dumb", "greedy", "opt"]
+    pretty = {"dumb": "Dumb", "greedy": "Greedy", "opt": "MILP"}
+    n = len(names)
+    width = 0.25
+    fig, ax = plt.subplots(figsize=(11, 5), constrained_layout=True)
+    colors = {"dumb": "0.55", "greedy": "tab:red", "opt": "tab:orange"}
+    xs = list(range(n))
+    for i, pol in enumerate(policies):
+        vals = [float(r["kpis"][pol]["objective_aud"]) for r in rows]
+        offset = (i - 1) * width
+        ax.bar([x + offset for x in xs], vals, width, label=pretty[pol], color=colors[pol])
+    ax.set_xticks(xs)
+    ax.set_xticklabels(names, rotation=20, ha="right")
+    ax.set_ylabel("Objective AUD")
+    ax.set_title("Wirra Bore suite — diesel + unmet penalty")
+    ax.legend()
+    ax.grid(True, axis="y", alpha=0.3)
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(path, dpi=120)
