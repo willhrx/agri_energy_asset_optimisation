@@ -465,7 +465,18 @@ HTML_PAGE = """<!DOCTYPE html>
       if (!r) return "";
       return "<dt>" + name + "</dt><dd>$" + fmt(r.objective_aud, 2) + " · " + fmt(r.diesel_litres, 1) + " L</dd>";
     }
-    return "<h2>Baselines</h2><dl>" + line("dumb", d) + line("greedy", g) + line("MILP", o) + "</dl>";
+    let html = "<h2>Baselines</h2><dl>" + line("dumb", d) + line("greedy", g) + line("MILP", o) + "</dl>";
+    const suite = payload.suite && payload.suite.suite;
+    if (suite && suite.length) {
+      html += "<h2>Suite AUD</h2><dl>";
+      suite.forEach(function (row) {
+        html += "<dt>" + row.name + "</dt><dd>D $" + fmt(row.dumb_objective_aud, 0) +
+          " · G $" + fmt(row.greedy_objective_aud, 0) +
+          " · M $" + fmt(row.opt_objective_aud, 0) + "</dd>";
+      });
+      html += "</dl>";
+    }
+    return html;
   }
 
   function setHour(h) {
