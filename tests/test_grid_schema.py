@@ -32,13 +32,13 @@ def test_off_grid_station_has_no_market_or_grid_fields() -> None:
 def test_grid_station_must_not_define_diesel_fields() -> None:
     s = _grid()
     s["power"]["diesel_kw_max"] = 24.0
-    assert any("must not define diesel" in e for e in validate_station(s))
+    assert any("diesel and grid fields" in e for e in validate_station(s))
 
 
 def test_off_grid_station_must_not_define_grid_fields() -> None:
     wirra = json.loads((ROOT / "data" / "wirra-bore.json").read_text(encoding="utf-8"))
     wirra["power"]["grid_import_kw_max"] = 30.0
-    assert any("must not define grid" in e for e in validate_station(wirra))
+    assert any("diesel and grid fields" in e for e in validate_station(wirra))
 
 
 def test_grid_station_requires_market_block() -> None:

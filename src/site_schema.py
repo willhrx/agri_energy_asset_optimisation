@@ -64,15 +64,18 @@ def _validate_power_water(
 ) -> tuple[dict[str, Any], bool, dict[str, Any], dict[str, Any]]:
     """Validate power + water; return (power, is_grid, bores, paddocks)."""
     pwr = _section(e, station, "power", _POWER_BASE + _POWER_ANGLE)
-    is_grid = bool(pwr) and "grid_import_kw_max" in pwr
+    has_grid = bool(pwr) and any(k in pwr for k in _POWER_GRID)
+    has_diesel = bool(pwr) and any(k in pwr for k in _POWER_DIESEL)
+    is_grid = has_grid and not has_diesel
     if pwr:
-        mode_keys = _POWER_GRID if is_grid else _POWER_DIESEL
-        e.extend(_missing(pwr, mode_keys, "power"))
-        if is_grid and any(k in pwr for k in _POWER_DIESEL):
-            e.append("power: grid-connected station must not define diesel fields")
-        if not is_grid and any(k in pwr for k in _POWER_GRID):
-            e.append("power: off-grid station must not define grid fields")
-        _positive(e, pwr, _POWER_BASE + mode_keys, "power")
+        if has_grid and has_diesel:
+            e.append("power: station defines both diesel and grid fields")
+        elif is_grid:
+            e.extend(_missing(pwr, _POWER_GRID, "power"))
+            _positive(e, pwr, _POWER_BASE + _POWER_GRID, "power")
+        else:
+            e.extend(_missing(pwr, _POWER_DIESEL, "power"))
+            _positive(e, pwr, _POWER_BASE + _POWER_DIESEL, "power")
         tilt, azimuth = _num(pwr.get("pv_tilt_deg")), _num(pwr.get("pv_azimuth_deg"))
         if tilt is not None and not 0 <= tilt <= 90:
             e.append(f"power.pv_tilt_deg {tilt} outside [0, 90]")
