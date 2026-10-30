@@ -9,6 +9,11 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import pandas as pd
+
+
+def _tick_labels(timestamps: list[str], tick_idx: list[int]) -> list[str]:
+    return [pd.Timestamp(timestamps[i]).strftime("%d %H:%M") for i in tick_idx]
 
 
 def plot_run(
@@ -21,7 +26,7 @@ def plot_run(
     n = len(series["timestamps"])
     x = list(range(n))
     tick_idx = list(range(0, n, 6))
-    tick_labels = [ts[8:10] + " " + ts[11:16] for ts in (series["timestamps"][i] for i in tick_idx)]
+    tick_labels = _tick_labels(series["timestamps"], tick_idx)
     paddocks = list(station["water"]["paddocks"].keys())
     reserve = float(station["water"]["dam_reserve_kl"])
 
@@ -102,7 +107,7 @@ def plot_compare(
     n = len(series["timestamps"])
     x = list(range(n))
     tick_idx = list(range(0, n, 6))
-    tick_labels = [ts[8:10] + " " + ts[11:16] for ts in (series["timestamps"][i] for i in tick_idx)]
+    tick_labels = _tick_labels(series["timestamps"], tick_idx)
 
     fig, axes = plt.subplots(4, 1, figsize=(12, 11), sharex=True, constrained_layout=True)
 

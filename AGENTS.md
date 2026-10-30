@@ -1,5 +1,10 @@
 # AGENTS.md — wirra-bore sprint 1
 
+> Status: sprints 1–3 are built (greedy, dumb baseline, MILP, GUI). The sprint-1 scope below is
+> kept as the original contract. Verify any change with: `ruff check src tests scripts`,
+> `pytest -q`, `python -m src.run --station data/wirra-bore.json --scenario wirra-summer-clear`,
+> `python scripts/check_run.py output`. See `.clinerules` and `agents/MODEL_GUIDE.md`.
+
 You are implementing a **single-station agri-energy dispatch prototype**, not a platform.
 
 ## Goal

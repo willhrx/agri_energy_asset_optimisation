@@ -1,0 +1,12 @@
+# Cline rules — wirra-bore
+
+1. Read `AGENTS.md`, then `PROBLEM.md`, before changing anything. `AGENTS.md` is canonical; this file is a pointer.
+2. Verify with the same commands CI uses:
+   - `ruff check src tests scripts`
+   - `pytest -q`
+   - `python -m src.run --station data/wirra-bore.json --scenario wirra-summer-clear`
+   - `python scripts/check_run.py output`
+3. Never change herd maths, the phi table, or the dam reserve without editing `PROBLEM.md` first.
+4. If a field is not in `data/wirra-bore.json`, it does not exist. Do not invent fields.
+5. Do not claim done until the commands above pass. If Python is unavailable, say so and rely on CI.
+6. Model choice guidance: `agents/MODEL_GUIDE.md`. Reusable task prompts: `agents/prompts/`.

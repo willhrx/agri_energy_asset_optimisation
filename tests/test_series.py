@@ -94,3 +94,18 @@ def test_horizon_and_timezone(series: dict, station: dict) -> None:
     assert station["initial"]["soc_kwh"] == 36
     assert station["initial"]["dam_kl"] == 5500
     assert station["initial"]["header_kl"]["north"] == 15
+
+
+def test_demand_follows_local_hour_for_non_midnight_start(station: dict) -> None:
+    """φ must be indexed by the timestamp's local hour, not by position in the horizon."""
+    import copy
+
+    shifted = copy.deepcopy(station)
+    shifted["run"]["start"] = "2026-01-16T06:00:00"
+    s = generate_series(shifted, scenario="wirra-summer-clear")
+    north = np.asarray(s["demand_kl_per_h"]["north"], dtype=float)
+    heat = np.asarray(s["heat_factor"], dtype=float)
+    expected = 220.0 * 70.0 * heat * np.asarray([PHI[int(ts[11:13])] for ts in s["timestamps"]]) / 1000.0
+    assert s["timestamps"][0].startswith("2026-01-16T06:00:00")
+    assert np.allclose(north, expected)
+

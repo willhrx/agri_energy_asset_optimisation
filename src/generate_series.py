@@ -182,8 +182,12 @@ def _mobs_on_paddock(station: dict[str, Any], paddock: str, hour_index: int) -> 
 def paddock_demand_kl(
     station: dict[str, Any],
     temp_c: np.ndarray,
+    index: pd.DatetimeIndex,
 ) -> dict[str, np.ndarray]:
-    """D_p,t [kL/h] = sum_{m on p} N_m * ell_m * H(T_t) * φ[h(t)] / 1000."""
+    """D_p,t [kL/h] = sum_{m on p} N_m * ell_m * H(T_t) * φ[h(t)] / 1000.
+
+    h(t) is the local hour of the timestamp, so non-midnight starts are correct.
+    """
     phi = np.asarray(station["phi_hourly"], dtype=float)
     h_t = heat_factor(temp_c)
     paddocks = list(station["water"]["paddocks"].keys())
@@ -191,7 +195,7 @@ def paddock_demand_kl(
     out = {p: np.zeros(n, dtype=float) for p in paddocks}
     mobs = station["herd"]["mobs"]
     for t in range(n):
-        hour_of_day = t % 24
+        hour_of_day = int(index[t].hour)
         phi_h = float(phi[hour_of_day])
         ht = float(h_t[t])
         for paddock in paddocks:
@@ -225,7 +229,7 @@ def generate_series(
     h_t = np.asarray(heat_factor(temp), dtype=float)
     pv = pv_ac_kw(station, index, temp, sky=str(run.get("sky", "clear")))
     load = homestead_kw(station, index, scenario_name)
-    demand = paddock_demand_kl(station, temp)
+    demand = paddock_demand_kl(station, temp, index)
 
     return {
         "station_id": station["station_id"],

@@ -33,12 +33,20 @@ pytest
 python -m src.run --station data/wirra-bore.json --scenario wirra-summer-clear
 ```
 
-## Grok Build prompt (paste after copying this folder)
+## Status
 
-```text
-Read AGENTS.md and PROBLEM.md. Implement sprint 1 only.
-Do not build a GUI or a MILP solver.
-Create the src/ and tests/ layout, requirements.txt, and a runnable
-python -m src.run that writes output/ artefacts.
-Keep herd maths and phi tables exactly as specified.
+Sprints 1–3 are built: dumb / greedy / MILP dispatch, KPIs, stress suite, schematic GUI
+(`python -m src.gui`). CI runs lint, tests (Linux + Windows, Python 3.11/3.12) and a golden run.
+
+## One-shot local check
+
+```bash
+scripts/bootstrap.sh        # Windows: scripts\bootstrap.ps1
 ```
+
+## Develop with Cline + OpenRouter
+
+1. In Cline choose provider **OpenRouter** and a model (see `agents/MODEL_GUIDE.md`).
+2. Cline reads `.clinerules`, which points to `AGENTS.md` and `PROBLEM.md`.
+3. Reusable task prompts live in `agents/prompts/`. Design decisions are in `docs/adr/`.
+4. Any model may be used; the test suite and `scripts/check_run.py` are the verifier.

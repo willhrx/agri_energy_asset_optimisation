@@ -25,6 +25,7 @@ from __future__ import annotations
 from typing import Any
 
 import numpy as np
+import pandas as pd
 
 
 def _paddocks(station: dict[str, Any]) -> list[str]:
@@ -428,7 +429,5 @@ def dispatch_greedy(station: dict[str, Any], series: dict[str, Any]) -> dict[str
 
 
 def pd_hour(ts: str) -> int:
-    # ISO timestamp; hour is local because we serialised with offset.
-    # "2026-01-16T00:00:00+11:00" or "...T00:00:00"
-    time_part = ts.split("T", 1)[1]
-    return int(time_part[0:2])
+    """Local wall-clock hour of an ISO timestamp (offset is kept, not converted)."""
+    return int(pd.Timestamp(ts).hour)
