@@ -4,12 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
+from src.markets import diesel_litres_per_hour
+
 
 def diesel_litres_for_g(g_kw: float, station: dict[str, Any]) -> float:
-    if g_kw <= 1e-12:
-        return 0.0
-    p = station["power"]
-    return float(p["diesel_litres_per_hour_idle"]) + float(p["diesel_litres_per_kwh"]) * float(g_kw)
+    return diesel_litres_per_hour(g_kw, station)
 
 
 def compute_kpis(station: dict[str, Any], series: dict[str, Any], dispatch: dict[str, Any]) -> dict[str, Any]:
@@ -41,6 +40,7 @@ def compute_kpis(station: dict[str, Any], series: dict[str, Any], dispatch: dict
         bore_hours_a += int(ua)
         bore_hours_b += int(ub)
     peak_diesel_kw = float(max(dispatch["g_kw"]) if dispatch["g_kw"] else 0.0)
+    dump_kwh_total = float(sum(dispatch.get("dump_kw", []))) * dt
 
     dam_trace = list(dispatch["V_kl"]) + [dispatch["V_kl_end"][-1]]
     soc_trace = list(dispatch["S_kwh"]) + [dispatch["S_kwh_end"][-1]]
@@ -76,6 +76,7 @@ def compute_kpis(station: dict[str, Any], series: dict[str, Any], dispatch: dict
         "unmet_kl_total": unmet_total,
         "hours_diesel_on": hours_diesel_on,
         "peak_diesel_kw": peak_diesel_kw,
+        "dump_kwh_total": dump_kwh_total,
         "water_pumped_kl": water_pumped_kl,
         "bore_hours_a": bore_hours_a,
         "bore_hours_b": bore_hours_b,
@@ -106,6 +107,7 @@ def print_kpis(kpis: dict[str, Any]) -> None:
     print(f"  water_pumped_kl   {kpis.get('water_pumped_kl', 0.0):.2f} kL")
     print(f"  bore_hours        A {kpis.get('bore_hours_a', 0)}  B {kpis.get('bore_hours_b', 0)}")
     print(f"  peak_diesel_kw    {kpis.get('peak_diesel_kw', 0.0):.2f}")
+    print(f"  dump_kwh_total    {kpis.get('dump_kwh_total', 0.0):.2f}")
     print(f"  min_dam_kl        {kpis['min_dam_kl']:.2f} kL")
     print(f"  min_soc_kwh       {kpis['min_soc_kwh']:.2f} kWh")
     print(f"  unmet_kl_total    {kpis['unmet_kl_total']:.4f} kL")

@@ -24,8 +24,16 @@ from __future__ import annotations
 
 from typing import Any
 
-import numpy as np
 import pandas as pd
+
+from src.dynamics import step_battery, step_dam, step_header
+
+# PROBLEM.md §8 greedy policy thresholds. Named constants, not JSON fields:
+# if a field is not in data/wirra-bore.json, it does not exist.
+DAM_PUMP_TRIGGER_KL = 2500.0        # rule 3: pump if dam below this
+DAM_NO_BORE_WITH_DIESEL_KL = 4000.0  # rule 5: don't start diesel-fed bore above this
+HEADER_SAFE_KL = 8.0                # rule 5: ... and all headers above this
+HEADER_TARGET_FRAC = 0.30           # rule 2: keep headers >= 30% if dam allows
 
 
 def _paddocks(station: dict[str, Any]) -> list[str]:
@@ -51,7 +59,7 @@ def release_water(
     reserve = float(station["water"]["dam_reserve_kl"])
     outlet = float(station["water"]["dam_outlet_kl_per_h"])
     header_cap = {p: float(station["water"]["paddocks"][p]["header_kl"]) for p in paddocks}
-    target_frac = 0.30
+    target_frac = HEADER_TARGET_FRAC
 
     available = min(outlet, max(0.0, V - reserve))
     f = {p: 0.0 for p in paddocks}
@@ -203,7 +211,7 @@ def _bore_feasible(kw: float, room: dict[str, float], V: float, W: dict[str, flo
     else:
         requires_diesel = False
 
-    if requires_diesel and V > 4000.0 and all(W[p] > 8.0 for p in W):
+    if requires_diesel and V > DAM_NO_BORE_WITH_DIESEL_KL and all(W[p] > HEADER_SAFE_KL for p in W):
         return False
     return True
 
@@ -321,15 +329,6 @@ def allocate_power(
     }
 
 
-def _step_battery(S: float, c_kw: float, d_kw: float, station: dict[str, Any]) -> float:
-    p = station["power"]
-    dt = float(station["timestep_hours"])
-    s_min = float(p["soc_min_frac"]) * float(p["battery_kwh"])
-    s_max = float(p["soc_max_frac"]) * float(p["battery_kwh"])
-    s_next = S + float(p["eta_charge"]) * c_kw * dt - d_kw * dt / float(p["eta_discharge"])
-    return float(np.clip(s_next, s_min, s_max))
-
-
 def dispatch_greedy(station: dict[str, Any], series: dict[str, Any]) -> dict[str, Any]:
     paddocks = _paddocks(station)
     n = int(series["horizon_hours"])
@@ -343,9 +342,6 @@ def dispatch_greedy(station: dict[str, Any], series: dict[str, Any]) -> dict[str
     S = float(station["initial"]["soc_kwh"])
     V = float(station["initial"]["dam_kl"])
     W = {p: float(station["initial"]["header_kl"][p]) for p in paddocks}
-
-    spill = float(station["water"]["dam_spill_kl"])
-    reserve = float(station["water"]["dam_reserve_kl"])
 
     out: dict[str, Any] = {
         "policy": "greedy",
@@ -373,7 +369,7 @@ def dispatch_greedy(station: dict[str, Any], series: dict[str, Any]) -> dict[str
         f, unmet = release_water(V, W, D, station)
 
         hour_local = pd_hour(timestamps[t])
-        need_pump = V < 2500.0 or headers_fail_next_3(V, W, demand, t, station)
+        need_pump = V < DAM_PUMP_TRIGGER_KL or headers_fail_next_3(V, W, demand, t, station)
         uA, uB = select_bores(
             need_pump=need_pump,
             no_pump_hour=hour_local in no_pump,
@@ -388,22 +384,17 @@ def dispatch_greedy(station: dict[str, Any], series: dict[str, Any]) -> dict[str
         power = allocate_power(float(load[t]), float(pv[t]), S, uA, uB, station)
 
         inflow = _bore_kl_per_h(station, "bore_a") * uA + _bore_kl_per_h(station, "bore_b") * uB
-        v_next = V + inflow * dt - sum(f[p] for p in paddocks) * dt
-        if v_next > spill:
-            v_next = spill
-        if v_next < reserve:
-            v_next = reserve
+        v_next = step_dam(V, inflow, sum(f[p] for p in paddocks), dt, station)
 
         w_next = {}
         for p in paddocks:
-            w = W[p] + f[p] * dt - D[p] * dt + unmet[p] * dt
-            if w < 0.0:
-                unmet[p] += -w / dt
-                w = 0.0
-            cap = float(station["water"]["paddocks"][p]["header_kl"])
-            w_next[p] = min(w, cap)
+            extra, w_next[p] = step_header(
+                W[p], f[p], D[p], unmet[p], dt,
+                float(station["water"]["paddocks"][p]["header_kl"]),
+            )
+            unmet[p] += extra
 
-        s_next = _step_battery(S, power["c_kw"], power["d_kw"], station)
+        s_next = step_battery(S, power["c_kw"], power["d_kw"], station)
 
         out["uA"].append(int(uA))
         out["uB"].append(int(uB))

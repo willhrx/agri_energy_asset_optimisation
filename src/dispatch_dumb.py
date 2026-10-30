@@ -17,6 +17,7 @@ from src.dispatch_greedy import (
     release_water,
     select_bores,
 )
+from src.dynamics import step_dam, step_header
 
 
 def allocate_dumb(
@@ -67,8 +68,6 @@ def dispatch_dumb(station: dict[str, Any], series: dict[str, Any]) -> dict[str, 
     S = float(station["initial"]["soc_kwh"])
     V = float(station["initial"]["dam_kl"])
     W = {p: float(station["initial"]["header_kl"][p]) for p in paddocks}
-    spill = float(station["water"]["dam_spill_kl"])
-    reserve = float(station["water"]["dam_reserve_kl"])
     override = float(station["rules"]["no_pump_override_if_dam_below_kl"])
 
     out: dict[str, Any] = {
@@ -110,15 +109,14 @@ def dispatch_dumb(station: dict[str, Any], series: dict[str, Any]) -> dict[str, 
         )
         power = allocate_dumb(float(load[t]), float(pv[t]), uA, uB, station)
         inflow = _bore_kl_per_h(station, "bore_a") * uA + _bore_kl_per_h(station, "bore_b") * uB
-        v_next = min(spill, max(reserve, V + inflow * dt - sum(f[p] for p in paddocks) * dt))
+        v_next = step_dam(V, inflow, sum(f[p] for p in paddocks), dt, station)
         w_next = {}
         for p in paddocks:
-            w = W[p] + f[p] * dt - D[p] * dt + unmet[p] * dt
-            if w < 0.0:
-                unmet[p] += -w / dt
-                w = 0.0
-            cap = float(station["water"]["paddocks"][p]["header_kl"])
-            w_next[p] = min(w, cap)
+            extra, w_next[p] = step_header(
+                W[p], f[p], D[p], unmet[p], dt,
+                float(station["water"]["paddocks"][p]["header_kl"]),
+            )
+            unmet[p] += extra
 
         out["uA"].append(int(uA))
         out["uB"].append(int(uB))

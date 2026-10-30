@@ -8,11 +8,9 @@ from pathlib import Path
 from typing import Any
 
 from src.compare import compare_kpis, print_compare
-from src.dispatch_dumb import dispatch_dumb
-from src.dispatch_greedy import dispatch_greedy
-from src.dispatch_opt import dispatch_opt
 from src.generate_series import generate_series
 from src.kpis import compute_kpis, print_kpis
+from src.policies import get_policy
 from src.plot_run import plot_compare, plot_run, plot_suite
 from src.scenarios import SUITE, overlay_station
 
@@ -65,8 +63,8 @@ def run_one(
         temp_min_c=temp_min_c,
         temp_max_c=temp_max_c,
     )
-    dumb = dispatch_dumb(station, series)
-    greedy = dispatch_greedy(station, series)
+    dumb = get_policy("dumb")(station, series)
+    greedy = get_policy("greedy")(station, series)
     kpis_d = compute_kpis(station, series, dumb)
     kpis_g = compute_kpis(station, series, greedy)
 
@@ -90,7 +88,7 @@ def run_one(
     }
     wrote = ["series.json", "dispatch_dumb.json", "dispatch_greedy.json", "kpis_dumb.json", "kpis.json", "run.png", "run_dumb.png"]
     if not greedy_only:
-        opt = dispatch_opt(station, series)
+        opt = get_policy("milp")(station, series)
         kpis_o = compute_kpis(station, series, opt)
         cmp = compare_kpis(kpis_g, kpis_o, dumb=kpis_d)
         write_json(out / "dispatch_opt.json", opt)
