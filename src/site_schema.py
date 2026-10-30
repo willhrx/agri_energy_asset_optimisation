@@ -19,6 +19,14 @@ _POWER = (
     "diesel_litres_per_kwh",
 )
 _WATER = ("dam_usable_kl", "dam_reserve_kl", "dam_spill_kl", "dam_outlet_kl_per_h")
+# Strictly positive power fields. pv_tilt_deg / pv_azimuth_deg may legitimately be 0
+# (horizontal array, north-facing) and are range-checked instead.
+_POWER_POSITIVE = (
+    "pv_kwp", "inverter_ac_kw", "system_loss_frac",
+    "battery_kwh", "battery_kw", "soc_min_frac", "soc_max_frac", "eta_charge",
+    "eta_discharge", "diesel_kw_min", "diesel_kw_max", "diesel_litres_per_hour_idle",
+    "diesel_litres_per_kwh",
+)
 _BORE = ("kw", "litres_per_s", "feeds")
 _MOB = ("class", "head", "liveweight_kg", "litres_per_hd_per_day_base")
 _RUN = ("name", "start", "horizon_hours", "sky", "temp_min_c", "temp_max_c")
@@ -57,7 +65,12 @@ def _validate_power_water(e: list[str], station: dict[str, Any]) -> tuple[dict[s
     """Validate power + water; return (power, bores, paddocks)."""
     pwr = _section(e, station, "power", _POWER)
     if pwr:
-        _positive(e, pwr, _POWER, "power")
+        _positive(e, pwr, _POWER_POSITIVE, "power")
+        tilt, azimuth = _num(pwr.get("pv_tilt_deg")), _num(pwr.get("pv_azimuth_deg"))
+        if tilt is not None and not 0 <= tilt <= 90:
+            e.append(f"power.pv_tilt_deg {tilt} outside [0, 90]")
+        if azimuth is not None and not 0 <= azimuth < 360:
+            e.append(f"power.pv_azimuth_deg {azimuth} outside [0, 360)")
         s_min, s_max = _num(pwr.get("soc_min_frac")), _num(pwr.get("soc_max_frac"))
         g_min, g_max = _num(pwr.get("diesel_kw_min")), _num(pwr.get("diesel_kw_max"))
         if None not in (s_min, s_max) and s_min >= s_max:

@@ -43,6 +43,23 @@ def test_header_key_mismatch_detected() -> None:
     assert any("initial.header_kl" in e for e in validate_station(s))
 
 
+def test_zero_azimuth_is_valid() -> None:
+    # Regression: north-facing arrays have azimuth 0; it must not trip the >0 check.
+    s = _station()
+    s["power"]["pv_azimuth_deg"] = 0.0
+    s["power"]["pv_tilt_deg"] = 0.0
+    assert validate_station(s) == []
+
+
+def test_out_of_range_tilt_and_azimuth_detected() -> None:
+    s = _station()
+    s["power"]["pv_tilt_deg"] = 95.0
+    s["power"]["pv_azimuth_deg"] = 400.0
+    errs = validate_station(s)
+    assert any("pv_tilt_deg" in e for e in errs)
+    assert any("pv_azimuth_deg" in e for e in errs)
+
+
 def test_unknown_placement_mob_detected() -> None:
     s = copy.deepcopy(_station())
     s["placement"][0]["paddock_mobs"]["north"].append("ghost_mob")
