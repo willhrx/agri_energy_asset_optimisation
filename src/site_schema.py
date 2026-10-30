@@ -270,14 +270,13 @@ def validate_station(station: dict[str, Any]) -> list[str]:
             e.append(f"station.{k} must be > 0")
 
     _section(e, station, "location", _LOCATION)
+    pwr, is_grid, _bores, paddocks = _validate_power_water(e, station)
+    water = station.get("water") if isinstance(station.get("water"), dict) else {}
     obj = _section(e, station, "objective", ("unmet_water_aud_per_kl",))
     if obj:
         if not is_grid:
             e.extend(_missing(obj, ("diesel_aud_per_litre",), "objective"))
         _positive(e, obj, tuple(k for k in _OBJECTIVE_ALL if k in obj), "objective")
-
-    pwr, is_grid, _bores, paddocks = _validate_power_water(e, station)
-    water = station.get("water") if isinstance(station.get("water"), dict) else {}
     _validate_herd_placement(e, station, paddocks)
     _validate_series_tables(e, station)
     _validate_market(e, station, is_grid)
