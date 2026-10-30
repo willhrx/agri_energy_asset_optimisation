@@ -10,7 +10,8 @@ from pathlib import Path
 
 import pytest
 
-from src.mcp_server import REPO_ROOT, call_tool, handle_message, list_tools
+from src.mcp_server import call_tool, handle_message, list_tools
+from src.run_service import REPO_ROOT
 
 ROOT = Path(__file__).resolve().parents[1]
 

@@ -11,10 +11,9 @@ from __future__ import annotations
 
 import json
 import sys
-from typing import Any
+from typing import Any, Callable
 
 from src.run_service import (
-    REPO_ROOT,
     load_station,
     prepare_run,
     run_comparison,
