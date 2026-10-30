@@ -138,6 +138,6 @@ def test_subprocess_mcp_session() -> None:
     assert len(lines) == 3, proc.stderr  # notification gets no response
     init, tools, call = (json.loads(ln) for ln in lines)
     assert init["result"]["serverInfo"]["name"] == "wirra-bore-engine"
-    assert {"name": t["name"] for t in tools["result"]["tools"]} >= {"run_scenario"}
+    assert {t["name"] for t in tools["result"]["tools"]} >= {"run_scenario"}
     kpis = json.loads(call["result"]["content"][0]["text"])["kpis"]["greedy"]
     assert kpis["unmet_kl_total"] == pytest.approx(0.0, abs=1e-9)
