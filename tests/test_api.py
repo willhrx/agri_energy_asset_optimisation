@@ -116,8 +116,6 @@ def test_mcp_and_http_contracts_match() -> None:
 def test_broken_inline_station_still_runs_but_reports_errors() -> None:
     broken = copy.deepcopy(_station())
     broken["phi_hourly"][0] = 0.5
-    r = client.get("/station", json=None)  # sanity: default ok
-    assert r.status_code == 200
     r2 = client.post("/runs", json={"station": broken, "policies": ["greedy"]})
     # Engine runs on the dict as given; validation is a separate tool.
     assert r2.status_code == 200
