@@ -1,0 +1,137 @@
+{
+  "station_id": "trangie-grid",
+  "timezone": "Australia/Sydney",
+  "timestep_hours": 1,
+  "horizon_hours": 48,
+  "location": {
+    "lat": -32.03,
+    "lon": 147.98,
+    "altitude_m": 250
+  },
+  "objective": {
+    "unmet_water_aud_per_kl": 50000
+  },
+  "market": {
+    "type": "au_nem_tou",
+    "import_tariff_c_per_kwh": { "offpeak": 18, "shoulder": 38, "peak": 62 },
+    "tou_hours": { "offpeak": [22, 7], "shoulder": [7, 17], "peak": [17, 22] },
+    "feed_in_c_per_kwh": 8
+  },
+  "power": {
+    "pv_kwp": 40,
+    "pv_tilt_deg": 32,
+    "pv_azimuth_deg": 0,
+    "inverter_ac_kw": 36,
+    "system_loss_frac": 0.14,
+    "battery_kwh": 60,
+    "battery_kw": 15,
+    "soc_min_frac": 0.15,
+    "soc_max_frac": 0.95,
+    "eta_charge": 0.95,
+    "eta_discharge": 0.95,
+    "grid_import_kw_max": 30,
+    "grid_export_kw_max": 20
+  },
+  "water": {
+    "dam_usable_kl": 8000,
+    "dam_reserve_kl": 1000,
+    "dam_spill_kl": 10000,
+    "dam_outlet_kl_per_h": 40,
+    "bores": {
+      "bore_a": { "kw": 11, "litres_per_s": 4, "feeds": "dam" },
+      "bore_b": { "kw": 15, "litres_per_s": 6, "feeds": "dam" }
+    },
+    "paddocks": {
+      "north": { "header_kl": 20 },
+      "creek": { "header_kl": 20 },
+      "dam_paddock": { "header_kl": 20 },
+      "back": { "header_kl": 20 }
+    }
+  },
+  "herd": {
+    "notes": "One watering cell. Bases are cool-weather; generator applies H(T).",
+    "mobs": {
+      "weaners": {
+        "class": "weaner",
+        "head": 180,
+        "liveweight_kg": 280,
+        "litres_per_hd_per_day_base": 50
+      },
+      "cows_calves": {
+        "class": "cow_calf",
+        "head": 220,
+        "liveweight_kg": 480,
+        "litres_per_hd_per_day_base": 70
+      },
+      "bulls": {
+        "class": "bull",
+        "head": 8,
+        "liveweight_kg": 700,
+        "litres_per_hd_per_day_base": 60
+      }
+    }
+  },
+  "placement": [
+    {
+      "from_hour": 0,
+      "to_hour": 48,
+      "paddock_mobs": {
+        "north": ["cows_calves"],
+        "creek": ["weaners"],
+        "dam_paddock": ["bulls"],
+        "back": []
+      }
+    }
+  ],
+  "phi_hourly": [
+    0.012, 0.010, 0.008, 0.008, 0.012, 0.020,
+    0.042, 0.055, 0.058, 0.054, 0.048, 0.044,
+    0.040, 0.036, 0.055, 0.080, 0.100, 0.095,
+    0.070, 0.050, 0.040, 0.030, 0.020, 0.013
+  ],
+  "homestead_weekday_kw": [
+    3.0, 2.5, 2.5, 2.5, 3.0, 4.0,
+    10.0, 20.0, 16.0, 12.0, 7.0, 7.0,
+    6.0, 6.0, 7.0, 8.0, 18.0, 16.0,
+    12.0, 10.0, 8.0, 6.0, 5.0, 4.0
+  ],
+  "homestead_weekend_hour_overrides_kw": { "7": 12.0, "8": 10.0 },
+  "layout": {
+    "comment": "GUI only; same topology as wirra-bore with grid replacing diesel.",
+    "nodes": {
+      "homestead": { "x": 120, "y": 80, "kind": "load" },
+      "pv": { "x": 100, "y": 60, "kind": "pv" },
+      "battery": { "x": 140, "y": 60, "kind": "battery" },
+      "grid": { "x": 160, "y": 80, "kind": "grid" },
+      "dam": { "x": 300, "y": 200, "kind": "dam" },
+      "bore_a": { "x": 220, "y": 160, "kind": "bore" },
+      "bore_b": { "x": 360, "y": 240, "kind": "bore" },
+      "north": { "x": 200, "y": 40, "kind": "paddock" },
+      "creek": { "x": 80, "y": 200, "kind": "paddock" },
+      "dam_paddock": { "x": 320, "y": 280, "kind": "paddock" },
+      "back": { "x": 480, "y": 220, "kind": "paddock" }
+    }
+  },
+  "run": {
+    "name": "trangie-summer-clear",
+    "start": "2026-02-13T00:00:00",
+    "horizon_hours": 48,
+    "sky": "clear",
+    "temp_min_c": 22,
+    "temp_max_c": 37
+  },
+  "rules": {
+    "no_pump_hours_local": [11, 12, 13, 14, 15],
+    "no_pump_override_if_dam_below_kl": 1500
+  },
+  "initial": {
+    "soc_kwh": 36,
+    "dam_kl": 5500,
+    "header_kl": {
+      "north": 15,
+      "creek": 15,
+      "dam_paddock": 15,
+      "back": 15
+    }
+  }
+}

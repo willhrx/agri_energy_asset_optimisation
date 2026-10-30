@@ -11,22 +11,20 @@ from typing import Any
 
 _TOP = ("station_id", "timezone", "timestep_hours", "horizon_hours")
 _LOCATION = ("lat", "lon", "altitude_m")
-_OBJECTIVE = ("diesel_aud_per_litre", "unmet_water_aud_per_kl")
-_POWER = (
-    "pv_kwp", "pv_tilt_deg", "pv_azimuth_deg", "inverter_ac_kw", "system_loss_frac",
-    "battery_kwh", "battery_kw", "soc_min_frac", "soc_max_frac", "eta_charge",
-    "eta_discharge", "diesel_kw_min", "diesel_kw_max", "diesel_litres_per_hour_idle",
-    "diesel_litres_per_kwh",
-)
-_WATER = ("dam_usable_kl", "dam_reserve_kl", "dam_spill_kl", "dam_outlet_kl_per_h")
-# Strictly positive power fields. pv_tilt_deg / pv_azimuth_deg may legitimately be 0
-# (horizontal array, north-facing) and are range-checked instead.
-_POWER_POSITIVE = (
+_OBJECTIVE_ALL = ("diesel_aud_per_litre", "unmet_water_aud_per_kl")
+_POWER_BASE = (
     "pv_kwp", "inverter_ac_kw", "system_loss_frac",
     "battery_kwh", "battery_kw", "soc_min_frac", "soc_max_frac", "eta_charge",
-    "eta_discharge", "diesel_kw_min", "diesel_kw_max", "diesel_litres_per_hour_idle",
+    "eta_discharge",
+)
+_POWER_ANGLE = ("pv_tilt_deg", "pv_azimuth_deg")  # range-checked; may be 0
+_POWER_DIESEL = (
+    "diesel_kw_min", "diesel_kw_max", "diesel_litres_per_hour_idle",
     "diesel_litres_per_kwh",
 )
+_POWER_GRID = ("grid_import_kw_max", "grid_export_kw_max")
+_TOU_NAMES = ("offpeak", "shoulder", "peak")
+_WATER = ("dam_usable_kl", "dam_reserve_kl", "dam_spill_kl", "dam_outlet_kl_per_h")
 _BORE = ("kw", "litres_per_s", "feeds")
 _MOB = ("class", "head", "liveweight_kg", "litres_per_hd_per_day_base")
 _RUN = ("name", "start", "horizon_hours", "sky", "temp_min_c", "temp_max_c")
@@ -61,22 +59,32 @@ def _section(e: list[str], station: dict[str, Any], name: str, keys: tuple[str, 
     return station[name]
 
 
-def _validate_power_water(e: list[str], station: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
-    """Validate power + water; return (power, bores, paddocks)."""
-    pwr = _section(e, station, "power", _POWER)
+def _validate_power_water(
+    e: list[str], station: dict[str, Any]
+) -> tuple[dict[str, Any], bool, dict[str, Any], dict[str, Any]]:
+    """Validate power + water; return (power, is_grid, bores, paddocks)."""
+    pwr = _section(e, station, "power", _POWER_BASE + _POWER_ANGLE)
+    is_grid = bool(pwr) and "grid_import_kw_max" in pwr
     if pwr:
-        _positive(e, pwr, _POWER_POSITIVE, "power")
+        mode_keys = _POWER_GRID if is_grid else _POWER_DIESEL
+        e.extend(_missing(pwr, mode_keys, "power"))
+        if is_grid and any(k in pwr for k in _POWER_DIESEL):
+            e.append("power: grid-connected station must not define diesel fields")
+        if not is_grid and any(k in pwr for k in _POWER_GRID):
+            e.append("power: off-grid station must not define grid fields")
+        _positive(e, pwr, _POWER_BASE + mode_keys, "power")
         tilt, azimuth = _num(pwr.get("pv_tilt_deg")), _num(pwr.get("pv_azimuth_deg"))
         if tilt is not None and not 0 <= tilt <= 90:
             e.append(f"power.pv_tilt_deg {tilt} outside [0, 90]")
         if azimuth is not None and not 0 <= azimuth < 360:
             e.append(f"power.pv_azimuth_deg {azimuth} outside [0, 360)")
         s_min, s_max = _num(pwr.get("soc_min_frac")), _num(pwr.get("soc_max_frac"))
-        g_min, g_max = _num(pwr.get("diesel_kw_min")), _num(pwr.get("diesel_kw_max"))
         if None not in (s_min, s_max) and s_min >= s_max:
             e.append("power.soc_min_frac must be < power.soc_max_frac")
-        if None not in (g_min, g_max) and g_min >= g_max:
-            e.append("power.diesel_kw_min must be < power.diesel_kw_max")
+        if not is_grid:
+            g_min, g_max = _num(pwr.get("diesel_kw_min")), _num(pwr.get("diesel_kw_max"))
+            if None not in (g_min, g_max) and g_min >= g_max:
+                e.append("power.diesel_kw_min must be < power.diesel_kw_max")
 
     water = _section(e, station, "water", _WATER)
     bores: dict[str, Any] = {}
@@ -112,7 +120,7 @@ def _validate_power_water(e: list[str], station: dict[str, Any]) -> tuple[dict[s
                 v = _num(pd_.get("header_kl")) if isinstance(pd_, dict) else None
                 if v is None or v <= 0:
                     e.append(f"water.paddocks.{name}.header_kl must be a number > 0")
-    return pwr or {}, bores, paddocks
+    return pwr or {}, is_grid, bores, paddocks
 
 
 def _validate_herd_placement(e: list[str], station: dict[str, Any], paddocks: dict[str, Any]) -> dict[str, Any]:
@@ -204,6 +212,55 @@ def _validate_initial(e: list[str], station: dict[str, Any], pwr: dict[str, Any]
             e.append(f"initial.header_kl.{name} must be in [0, header_kl]")
 
 
+def _validate_market(e: list[str], station: dict[str, Any], is_grid: bool) -> None:
+    """Validate the market block (PROBLEM-AU-NEM.md §9). Off-grid stations omit it."""
+    market = station.get("market")
+    if market is None:
+        if is_grid:
+            e.append("market missing for grid-connected station")
+        return
+    if not isinstance(market, dict):
+        e.append("market must be an object")
+        return
+    if market.get("type") != "au_nem_tou":
+        e.append(f"market.type must be 'au_nem_tou' (got {market.get('type')!r})")
+        return
+    if not is_grid:
+        e.append("market.type au_nem_tou requires grid power fields and no diesel fields")
+    tariffs = market.get("import_tariff_c_per_kwh")
+    if not isinstance(tariffs, dict) or set(tariffs) != set(_TOU_NAMES):
+        e.append("market.import_tariff_c_per_kwh must define exactly offpeak/shoulder/peak")
+    else:
+        _positive(e, tariffs, _TOU_NAMES, "market.import_tariff_c_per_kwh")
+    tou = market.get("tou_hours")
+    if not isinstance(tou, dict) or set(tou) != set(_TOU_NAMES):
+        e.append("market.tou_hours must define exactly offpeak/shoulder/peak")
+    else:
+        covered = [0] * 24
+        windows_ok = True
+        for name in _TOU_NAMES:
+            window = tou[name]
+            if (not isinstance(window, list) or len(window) != 2
+                    or any(not isinstance(x, int) for x in window)):
+                e.append(f"market.tou_hours.{name} must be [start, end] integer hours")
+                windows_ok = False
+                continue
+            start, end = window
+            if start == end:
+                e.append(f"market.tou_hours.{name} must span at least one hour")
+                windows_ok = False
+                continue
+            h = start
+            while h != end:
+                covered[h % 24] += 1
+                h = (h + 1) % 24
+        if windows_ok and any(c != 1 for c in covered):
+            e.append("market.tou_hours windows must tile the 24-hour day exactly once")
+    fit = _num(market.get("feed_in_c_per_kwh"))
+    if fit is None or fit < 0:
+        e.append("market.feed_in_c_per_kwh must be a number >= 0")
+
+
 def validate_station(station: dict[str, Any]) -> list[str]:
     e: list[str] = []
     e.extend(_missing(station, _TOP, "station"))
@@ -213,14 +270,17 @@ def validate_station(station: dict[str, Any]) -> list[str]:
             e.append(f"station.{k} must be > 0")
 
     _section(e, station, "location", _LOCATION)
-    obj = _section(e, station, "objective", _OBJECTIVE)
+    obj = _section(e, station, "objective", ("unmet_water_aud_per_kl",))
     if obj:
-        _positive(e, obj, _OBJECTIVE, "objective")
+        if not is_grid:
+            e.extend(_missing(obj, ("diesel_aud_per_litre",), "objective"))
+        _positive(e, obj, tuple(k for k in _OBJECTIVE_ALL if k in obj), "objective")
 
-    pwr, _bores, paddocks = _validate_power_water(e, station)
+    pwr, is_grid, _bores, paddocks = _validate_power_water(e, station)
     water = station.get("water") if isinstance(station.get("water"), dict) else {}
     _validate_herd_placement(e, station, paddocks)
     _validate_series_tables(e, station)
+    _validate_market(e, station, is_grid)
 
     rules = _section(e, station, "rules", _RULES)
     if rules:
