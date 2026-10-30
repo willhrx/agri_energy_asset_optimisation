@@ -33,6 +33,29 @@ pytest
 python -m src.run --station data/wirra-bore.json --scenario wirra-summer-clear
 ```
 
+## MCP server (agents drive the engine)
+
+```bash
+python -m src.mcp_server     # stdio JSON-RPC; cwd = repo root
+```
+
+Wire it into Cline (`cline_mcp_settings.json`):
+
+```json
+{
+  "mcpServers": {
+    "wirra-bore": {
+      "command": "python",
+      "args": ["-m", "src.mcp_server"],
+      "cwd": "<repo root>"
+    }
+  }
+}
+```
+
+Tools: `list_scenarios`, `get_station`, `validate_station`, `run_scenario`,
+`compare_policies`. Design rationale: `docs/adr/0002-mcp-stdio.md`.
+
 ## Status
 
 Sprints 1–3 are built: dumb / greedy / MILP dispatch, KPIs, stress suite, schematic GUI
