@@ -112,7 +112,7 @@ def dispatch_dumb(station: dict[str, Any], series: dict[str, Any]) -> dict[str, 
         v_next = step_dam(V, inflow, sum(f[p] for p in paddocks), dt, station)
         w_next = {}
         for p in paddocks:
-            extra, w_next[p] = step_header(
+            w_next[p], extra = step_header(
                 W[p], f[p], D[p], unmet[p], dt,
                 float(station["water"]["paddocks"][p]["header_kl"]),
             )

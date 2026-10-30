@@ -43,6 +43,7 @@ def test_header_unmet_and_cap() -> None:
 
 
 def test_header_uses_existing_unmet() -> None:
+    # w = 1 + 0 - 2 + 0.5 = -0.5 -> clamped to 0, extra unmet 0.5.
     w_next, extra = step_header(1.0, 0.0, 2.0, 0.5, 1.0, 20.0)
     assert w_next == 0.0
-    assert extra == 0.0
+    assert extra == 0.5
