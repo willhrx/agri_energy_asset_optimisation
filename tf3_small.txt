@@ -1,7 +1,0 @@
-2026-10-30T18:48:01.7777881Z >       assert any("must not define grid" in e for e in validate_station(wirra))
-2026-10-30T18:48:01.7778650Z E       assert False
-2026-10-30T18:48:01.7779553Z E        +  where False = any(<generator object test_off_grid_station_must_not_define_grid_fields.<locals>.<genexpr> at 0x79d3d51c2810>)
-2026-10-30T18:48:01.7780315Z tests/test_grid_schema.py:41: AssertionError
-2026-10-30T18:48:01.7814543Z FAILED tests/test_grid_schema.py::test_off_grid_station_must_not_define_grid_fields - assert False
-2026-10-30T18:48:01.7815893Z 1 failed, 95 passed, 721 warnings in 7.71s
-2026-10-30T18:48:02.0821958Z ##[error]Process completed with exit code 1.
