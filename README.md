@@ -56,6 +56,16 @@ Wire it into Cline (`cline_mcp_settings.json`):
 Tools: `list_scenarios`, `get_station`, `validate_station`, `run_scenario`,
 `compare_policies`. Design rationale: `docs/adr/0002-mcp-stdio.md`.
 
+## HTTP API (service layer)
+
+```bash
+uvicorn src.api:app --reload      # http://127.0.0.1:8000/docs
+```
+
+Endpoints: `GET /health`, `GET /scenarios`, `GET /station`, `POST /runs`,
+`POST /compare`. Same contract as the MCP tools — both are thin adapters over
+`src/run_service.py` (see `docs/adr/0003-service-layer-api.md`).
+
 ## Status
 
 Sprints 1–3 are built: dumb / greedy / MILP dispatch, KPIs, stress suite, schematic GUI

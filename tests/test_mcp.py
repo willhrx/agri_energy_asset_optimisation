@@ -65,7 +65,7 @@ def test_run_scenario_greedy_clear() -> None:
 
 
 def test_run_scenario_unknown_policy_is_error() -> None:
-    with pytest.raises(KeyError):
+    with pytest.raises(ValueError):
         call_tool("run_scenario", {"policies": ["nope"]})
 
 

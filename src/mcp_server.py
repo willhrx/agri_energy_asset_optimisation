@@ -11,111 +11,50 @@ from __future__ import annotations
 
 import json
 import sys
-from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
-from src.compare import compare_kpis
-from src.generate_series import generate_series
-from src.kpis import compute_kpis
-from src.policies import get_policy
-from src.scenarios import SUITE, overlay_station
-from src.site_schema import validate_station
+from src.run_service import (
+    REPO_ROOT,
+    load_station,
+    prepare_run,
+    run_comparison,
+    run_policies,
+    scenario_list,
+    station_summary,
+    validate_station,
+)
 
 PROTOCOL_VERSION = "2024-11-05"
 SERVER_INFO = {"name": "wirra-bore-engine", "version": "0.1.0"}
-REPO_ROOT = Path(__file__).resolve().parents[1]
-
-# Compact KPI keys returned by run/compare tools (full kpis stay in artefacts).
-_COMPACT = (
-    "policy", "diesel_litres", "diesel_aud", "objective_aud", "unmet_kl_total",
-    "min_dam_kl", "min_soc_kwh", "pv_kwh", "pv_curtailed_kwh", "pv_utilisation",
-    "water_pumped_kl", "dump_kwh_total", "hours_diesel_on", "peak_diesel_kw",
-)
-
-
-def _compact(kpis: dict[str, Any]) -> dict[str, Any]:
-    return {k: kpis[k] for k in _COMPACT if k in kpis}
-
-
-def _load_station(args: dict[str, Any]) -> dict[str, Any]:
-    raw = args.get("station")
-    if isinstance(raw, dict):
-        return raw
-    path = Path(args.get("station_path") or "data/wirra-bore.json")
-    if not path.is_absolute():
-        path = REPO_ROOT / path
-    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def tool_list_scenarios(args: dict[str, Any]) -> dict[str, Any]:
-    return {"scenarios": [
-        {"name": s["name"], "overrides": {k: v for k, v in s.items() if k != "name"}}
-        for s in SUITE
-    ]}
+    return {"scenarios": scenario_list()}
 
 
 def tool_get_station(args: dict[str, Any]) -> dict[str, Any]:
-    st = _load_station(args)
-    water = st["water"]
-    return {
-        "station_id": st["station_id"],
-        "timezone": st["timezone"],
-        "power": {k: st["power"][k] for k in (
-            "pv_kwp", "battery_kwh", "battery_kw", "diesel_kw_min", "diesel_kw_max")},
-        "dam_kl": {"usable": water["dam_usable_kl"], "reserve": water["dam_reserve_kl"],
-                   "spill": water["dam_spill_kl"],
-                   "outlet_kl_per_h": water["dam_outlet_kl_per_h"]},
-        "bores": {name: {"kw": b["kw"], "litres_per_s": b["litres_per_s"],
-                         "feeds": b.get("feeds")}
-                  for name, b in water["bores"].items()},
-        "paddocks": list(water["paddocks"].keys()),
-        "herd": {name: m["head"] for name, m in st["herd"]["mobs"].items()},
-        "initial": st["initial"],
-        "schema_errors": validate_station(st),
-    }
+    return station_summary(load_station(args))
 
 
 def tool_validate_station(args: dict[str, Any]) -> dict[str, Any]:
-    st = _load_station(args)
+    st = load_station(args)
     errors = validate_station(st)
     return {"ok": not errors, "errors": errors, "station_id": st.get("station_id")}
 
 
-def _resolve_station_and_series(args: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any], str]:
-    station = _load_station(args)
-    scenario = str(args.get("scenario") or station["run"]["name"])
-    station = overlay_station(
-        station, dam_kl=args.get("dam_kl"), temp_min_c=args.get("temp_min_c"),
-        temp_max_c=args.get("temp_max_c"), sky=args.get("sky"), scenario=scenario,
-    )
-    series = generate_series(
-        station, scenario=scenario, sky=args.get("sky"),
-        temp_min_c=args.get("temp_min_c"), temp_max_c=args.get("temp_max_c"),
-    )
-    return station, series, scenario
-
-
 def tool_run_scenario(args: dict[str, Any]) -> dict[str, Any]:
-    station, series, scenario = _resolve_station_and_series(args)
+    station, series, scenario = prepare_run(args)
     policies = [str(p) for p in args.get("policies") or ["greedy"]]
     return {
         "scenario": scenario,
         "horizon_hours": series["horizon_hours"],
-        "kpis": {name: _compact(compute_kpis(station, series, get_policy(name)(station, series)))
-                 for name in policies},
+        "kpis": run_policies(station, series, policies),
     }
 
 
 def tool_compare_policies(args: dict[str, Any]) -> dict[str, Any]:
-    station, series, scenario = _resolve_station_and_series(args)
-    kpis = {name: compute_kpis(station, series, get_policy(name)(station, series))
-            for name in ("dumb", "greedy", "milp")}
-    cmp = compare_kpis(kpis["greedy"], kpis["milp"], dumb=kpis["dumb"])
-    return {
-        "scenario": scenario,
-        "kpis": {k: _compact(v) for k, v in kpis.items()},
-        "comparison": cmp,
-    }
+    station, series, scenario = prepare_run(args)
+    return run_comparison(station, series, scenario)
 
 
 TOOLS: dict[str, dict[str, Any]] = {
