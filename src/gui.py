@@ -48,10 +48,13 @@ def load_json(path: Path) -> Any | None:
 
 
 def bus_node(nodes: dict[str, Any]) -> dict[str, Any]:
-    """Bus is not in layout.nodes; sit it under the homestead power cluster."""
-    keys = ("pv", "battery", "diesel", "homestead")
-    xs = [float(nodes[k]["x"]) for k in keys if k in nodes]
-    ys = [float(nodes[k]["y"]) for k in keys if k in nodes]
+    """Bus is not in layout.nodes; sit it under the power cluster (kind-derived)."""
+    kinds = ("pv", "battery", "diesel", "load")
+    keys = [k for k, v in nodes.items() if isinstance(v, dict) and v.get("kind") in kinds]
+    if not keys:
+        keys = ["pv", "battery", "diesel", "homestead"]
+    xs = [float(nodes[k]["x"]) for k in keys]
+    ys = [float(nodes[k]["y"]) for k in keys]
     return {
         "x": sum(xs) / len(xs),
         "y": sum(ys) / len(ys) + 32,
@@ -59,53 +62,60 @@ def bus_node(nodes: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def schematic_edges() -> list[dict[str, str]]:
-    """PROBLEM.md §2: PV/diesel/battery–bus; bus→homestead+bores; bores→dam; dam→headers."""
-    power_to_bus = [
+def schematic_edges(station: dict[str, Any]) -> list[dict[str, str]]:
+    """Site-graph edges derived from the station data itself.
+
+    Topology (PROBLEM.md §2): pv/diesel/battery → bus; bus → homestead and every
+    bore; each bore → its `feeds` target; the dam → every paddock. Node ids are
+    stable, so existing payloads keep the same edge ids as before.
+    """
+    water = station.get("water", {})
+    bores = water.get("bores", {})
+    paddocks = list(water.get("paddocks", {}).keys())
+    edges: list[dict[str, str]] = [
         {"id": "e_pv_bus", "src": "pv", "dst": "bus", "domain": "power"},
         {"id": "e_diesel_bus", "src": "diesel", "dst": "bus", "domain": "power"},
         {"id": "e_battery_bus", "src": "battery", "dst": "bus", "domain": "power"},
-    ]
-    bus_to_loads = [
         {"id": "e_bus_homestead", "src": "bus", "dst": "homestead", "domain": "power"},
-        {"id": "e_bus_bore_a", "src": "bus", "dst": "bore_a", "domain": "power"},
-        {"id": "e_bus_bore_b", "src": "bus", "dst": "bore_b", "domain": "power"},
     ]
-    bores_to_dam = [
-        {"id": "e_bore_a_dam", "src": "bore_a", "dst": "dam", "domain": "water"},
-        {"id": "e_bore_b_dam", "src": "bore_b", "dst": "dam", "domain": "water"},
-    ]
-    dam_to_headers = [
-        {"id": f"e_dam_{p}", "src": "dam", "dst": p, "domain": "water"} for p in HEADERS
-    ]
-    return power_to_bus + bus_to_loads + bores_to_dam + dam_to_headers
+    for name in bores:
+        edges.append({"id": f"e_bus_{name}", "src": "bus", "dst": name, "domain": "power"})
+    for name, spec in bores.items():
+        feeds = spec.get("feeds", "dam") if isinstance(spec, dict) else "dam"
+        edges.append({"id": f"e_{name}_{feeds}", "src": name, "dst": feeds, "domain": "water"})
+    for p in paddocks:
+        edges.append({"id": f"e_dam_{p}", "src": "dam", "dst": p, "domain": "water"})
+    return edges
 
 
 def build_payload(station: dict[str, Any], output_dir: Path) -> dict[str, Any]:
     nodes = dict(station.get("layout", {}).get("nodes", {}))
-    missing = [n for n in NODE_IDS if n not in nodes]
-    if missing:
-        raise KeyError(f"layout.nodes missing {missing}")
     water = station["water"]
     power = station["power"]
+    paddocks = list(water["paddocks"].keys())
+    required = {"pv", "battery", "diesel", "homestead", "dam"} | set(water["bores"]) | set(paddocks)
+    missing = [n for n in required if n not in nodes]
+    if missing:
+        raise KeyError(f"layout.nodes missing {missing}")
     return {
         "station_id": station.get("station_id", "wirra-bore"),
         "timezone": station.get("timezone", "Australia/Sydney"),
         "horizon_hours": int(station.get("horizon_hours", 48)),
         "nodes": nodes,
         "bus": bus_node(nodes),
-        "edges": schematic_edges(),
-        "node_ids": list(NODE_IDS),
-        "headers": list(HEADERS),
+        "edges": schematic_edges(station),
+        "node_ids": list(nodes.keys()),
+        "headers": paddocks,
         "bores": {
             name: {
                 "kw": float(spec["kw"]),
                 "litres_per_s": float(spec["litres_per_s"]),
                 "kl_per_h": float(spec["litres_per_s"]) * 3.6,
+                "feeds": str(spec.get("feeds", "dam")),
             }
             for name, spec in water["bores"].items()
         },
-        "header_kl": {p: float(water["paddocks"][p]["header_kl"]) for p in HEADERS},
+        "header_kl": {p: float(water["paddocks"][p]["header_kl"]) for p in paddocks},
         "dam_reserve_kl": float(water["dam_reserve_kl"]),
         "dam_spill_kl": float(water["dam_spill_kl"]),
         "battery_kwh": float(power["battery_kwh"]),
@@ -214,7 +224,7 @@ HTML_PAGE = """<!DOCTYPE html>
     <span id="hour-label">hour 0 / 47</span>
   </footer>
   <script>
-  const NODE_IDS = ["homestead","pv","battery","diesel","dam","bore_a","bore_b","north","creek","dam_paddock","back"];
+  function nodeIds() { return (payload && payload.node_ids) || []; }
   const SCALE = 1.85, PAD_X = 70, PAD_Y = 40;
   let payload = null, policy = "greedy", hour = 0, playing = false, timer = null;
 
@@ -259,27 +269,31 @@ HTML_PAGE = """<!DOCTYPE html>
     const dis = Number(at(d, "d_kw", t, 0));
     const f = {};
     for (const p of payload.headers) f[p] = Number(atMap(d.f_kl || {}, p, t, 0));
-    return {
+    const fl = {
       e_pv_bus: Math.max(0, pvUsed),
       e_diesel_bus: Math.max(0, g),
       e_battery_bus: Math.max(c, dis),
       battery_dir: dis >= c ? 1 : -1,
       e_bus_homestead: Number(at(s, "homestead_kw", t, 0)),
-      e_bus_bore_a: uA * (bores.bore_a ? bores.bore_a.kw : 11),
-      e_bus_bore_b: uB * (bores.bore_b ? bores.bore_b.kw : 15),
-      e_bore_a_dam: uA * (bores.bore_a ? bores.bore_a.kl_per_h : 14.4),
-      e_bore_b_dam: uB * (bores.bore_b ? bores.bore_b.kl_per_h : 21.6),
-      e_dam_north: f.north || 0,
-      e_dam_creek: f.creek || 0,
-      e_dam_dam_paddock: f.dam_paddock || 0,
-      e_dam_back: f.back || 0,
-      uA, uB, g, c, dis,
+      uA: uA, uB: uB, g: g, c: c, dis: dis,
       pv: Number(at(s, "pv_kw", t, 0)),
       load: Number(at(s, "homestead_kw", t, 0)),
       S: Number(at(d, "S_kwh", t, 0)),
       V: Number(at(d, "V_kl", t, 0)),
       temp: Number(at(s, "temp_c", t, 0)),
     };
+    for (const name of Object.keys(bores)) {
+      const spec = bores[name] || {};
+      const u = Number(d["u" + String(name).split("_").pop().toUpperCase()] || 0);
+      fl["u_" + name] = u;
+      fl["e_bus_" + name] = u * Number(spec.kw || 0);
+      fl["e_" + name + "_" + (spec.feeds || "dam")] = u * Number(spec.kl_per_h || 0);
+    }
+    for (const p of payload.headers) {
+      fl["dem_" + p] = Number(atMap((s.demand_kl_per_h || {}), p, t, 0));
+      fl["e_dam_" + p] = f[p] || 0;
+    }
+    return fl;
   }
 
   function nodeKind(id) {
@@ -300,11 +314,8 @@ HTML_PAGE = """<!DOCTYPE html>
       const spill = payload.dam_spill_kl || 10000;
       return fl.V / spill > 0.4 ? "#2f7f96" : "#3a4e55";
     }
-    if (kind === "bore") {
-      const on = id === "bore_a" ? fl.uA : fl.uB;
-      return on ? "#7fbfc8" : "#3d4a4e";
-    }
-    if (kind === "paddock") return id === "back" ? "#3a4630" : "#6a8a45";
+    if (kind === "bore") return fl["u_" + id] ? "#7fbfc8" : "#3d4a4e";
+    if (kind === "paddock") return (fl["dem_" + id] || 0) > 1e-9 ? "#6a8a45" : "#3a4630";
     if (kind === "bus") return "#b5bba8";
     return "#445";
   }
@@ -316,8 +327,9 @@ HTML_PAGE = """<!DOCTYPE html>
     if (id === "diesel") return fl.g > 0.05 ? fmt(fl.g, 1) + " kW" : "off";
     if (id === "homestead") return fmt(fl.load, 1) + " kW";
     if (id === "dam") return fmt(fl.V, 0) + " kL";
-    if (id === "bore_a") return fl.uA ? "ON 4 L/s" : "off";
-    if (id === "bore_b") return fl.uB ? "ON 6 L/s" : "off";
+    if (payload.bores && payload.bores[id]) {
+      return fl["u_" + id] ? "ON " + payload.bores[id].litres_per_s + " L/s" : "off";
+    }
     if (id === "bus") return "AC bus";
     if (payload.headers.indexOf(id) >= 0) {
       const w = atMap((d.W_kl || {}), id, t, 0);
@@ -362,7 +374,7 @@ HTML_PAGE = """<!DOCTYPE html>
     const gNodes = document.createElementNS(ns, "g");
     gNodes.setAttribute("id", "nodes");
     svg.appendChild(gNodes);
-    const ids = NODE_IDS.concat(["bus"]);
+    const ids = nodeIds().concat(["bus"]);
     for (const id of ids) {
       const p = pos(id);
       const g = document.createElementNS(ns, "g");
@@ -411,7 +423,7 @@ HTML_PAGE = """<!DOCTYPE html>
       el.classList.toggle("flow-on", on);
       el.setAttribute("stroke-width", String(on ? Math.min(7, 2 + mag / 6) : 2));
     }
-    for (const id of NODE_IDS.concat(["bus"])) {
+    for (const id of nodeIds().concat(["bus"])) {
       const g = document.getElementById("node-" + id);
       if (!g) continue;
       const glyph = g.querySelector(".glyph");
@@ -423,7 +435,7 @@ HTML_PAGE = """<!DOCTYPE html>
     const d = dispatch() || {};
     const ts = (s.timestamps && s.timestamps[t]) || "";
     document.getElementById("hour-label").textContent =
-      "hour " + t + " / 47  ·  " + ts.replace("T", " ").slice(0, 19);
+      "hour " + t + " / " + String((payload.horizon_hours || 48) - 1) + "  ·  " + ts.replace("T", " ").slice(0, 19);
     const unmet = payload.headers.reduce((acc, p) => acc + Number(atMap((d.unmet_kl || {}), p, t, 0)), 0);
     let kpis = payload.kpis || {};
     if (policy === "opt" && payload.kpis_opt) kpis = payload.kpis_opt;
@@ -438,7 +450,9 @@ HTML_PAGE = """<!DOCTYPE html>
       "<dt>charge / discharge</dt><dd>" + fmt(fl.c, 2) + " / " + fmt(fl.dis, 2) + " kW</dd>" +
       "<dt>SoC</dt><dd>" + fmt(fl.S, 2) + " kWh</dd>" +
       "<dt>dam V</dt><dd>" + fmt(fl.V, 1) + " kL</dd>" +
-      "<dt>bore A / B</dt><dd>" + (fl.uA ? "on" : "off") + " / " + (fl.uB ? "on" : "off") + "</dd>" +
+      "<dt>bores</dt><dd>" + Object.keys(payload.bores || {}).map(function (b) {
+        return b + (fl["u_" + b] ? " on" : " off");
+      }).join(" / ") + "</dd>" +
       "<dt>air temp</dt><dd>" + fmt(fl.temp, 1) + " °C</dd>" +
       "<dt>unmet this hour</dt><dd class='" + (unmet > 1e-9 ? "warn" : "") + "'>" + fmt(unmet, 3) + " kL</dd>" +
       "</dl><h2>Paddock demand</h2><dl>" +
@@ -621,21 +635,26 @@ def check_served_page(station: dict[str, Any], output_dir: Path) -> int:
     try:
         code, html = curl_page(url)
         print(f"GET {url} -> {code} ({len(html)} bytes)")
-        missing = [n for n in NODE_IDS if n not in html]
-        if code != 200 or missing:
-            print("  FAIL missing nodes:", missing)
+        if code != 200:
+            print("  FAIL http status", code)
             return 1
         for token in ("Play", "btn-play", "btn-opt", 'id="hour"', "min=\"0\"", "max=\"47\""):
             if token not in html:
                 print(f"  FAIL missing control {token!r}")
                 return 1
-        print("  nodes:", " ".join(NODE_IDS))
         pcode, pbody = curl_page(f"http://{host}:{port}/api/payload")
         payload = json.loads(pbody) if pcode == 200 else {}
+        node_ids = payload.get("node_ids") or []
+        expected = list(station.get("layout", {}).get("nodes", {}).keys())
+        missing = [n for n in expected if n not in node_ids]
         print(
             f"GET /api/payload -> {pcode} greedy={payload.get('dispatch_greedy') is not None} "
             f"opt={payload.get('dispatch_opt') is not None} edges={len(payload.get('edges') or [])}"
         )
+        if pcode != 200 or missing:
+            print("  FAIL missing nodes in payload:", missing)
+            return 1
+        print("  nodes:", " ".join(node_ids))
         print("curl check ok")
         return 0
     finally:

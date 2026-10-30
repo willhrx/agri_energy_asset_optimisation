@@ -44,12 +44,34 @@ def test_payload_includes_layout_and_dispatch() -> None:
 
 
 def test_site_graph_edges() -> None:
-    ids = {e["id"] for e in schematic_edges()}
+    station = json.loads((ROOT / "data" / "wirra-bore.json").read_text(encoding="utf-8"))
+    ids = {e["id"] for e in schematic_edges(station)}
     assert "e_pv_bus" in ids
     assert "e_dam_north" in ids
     assert "e_bore_a_dam" in ids
-    domains = {e["domain"] for e in schematic_edges()}
+    domains = {e["domain"] for e in schematic_edges(station)}
     assert domains == {"power", "water"}
+
+
+def test_edges_derived_from_station_not_hardcoded() -> None:
+    """A different station (extra bore, renamed paddock) must get its own edges."""
+    import copy
+
+    station = json.loads((ROOT / "data" / "wirra-bore.json").read_text(encoding="utf-8"))
+    station = copy.deepcopy(station)
+    station["water"]["bores"]["bore_c"] = {"kw": 9, "litres_per_s": 3, "feeds": "dam"}
+    station["water"]["paddocks"]["flat"] = station["water"]["paddocks"].pop("back")
+    station["layout"]["nodes"]["bore_c"] = {"x": 400, "y": 160, "kind": "bore"}
+    station["layout"]["nodes"]["flat"] = station["layout"]["nodes"].pop("back")
+    ids = {e["id"] for e in schematic_edges(station)}
+    assert "e_bus_bore_c" in ids
+    assert "e_bore_c_dam" in ids
+    assert "e_dam_flat" in ids
+    assert "e_dam_back" not in ids
+    payload = build_payload(station, ROOT / "output")
+    assert payload["node_ids"] == list(station["layout"]["nodes"].keys())
+    assert payload["headers"] == list(station["water"]["paddocks"].keys())
+    assert payload["bores"]["bore_c"]["feeds"] == "dam"
 
 
 def test_http_serves_html_and_payload() -> None:
